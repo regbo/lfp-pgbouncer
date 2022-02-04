@@ -16,5 +16,5 @@ docker run -it \
         --env "RELOAD_PASSWORD=pass" \
         -p "6432:6432" \
         -p "6488:6488" \
-        regbo/postgres-proxy:latest
+        regbo/lfp-pgbouncer:latest
 ```
