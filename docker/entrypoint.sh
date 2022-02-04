@@ -1,5 +1,4 @@
 #!/bin/bash
-
 set -e
 
 if [[ ! -z "$PGBOUNCER_AUTH_URL" ]]; then
