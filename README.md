@@ -1,9 +1,7 @@
 # lfp-pgbouncer
 
 Extension of pgbouncer that adds an external auth url:
-```
 https://github.com/bitnami/bitnami-docker-pgbouncer
-```
 
 ```
 docker run -it \
