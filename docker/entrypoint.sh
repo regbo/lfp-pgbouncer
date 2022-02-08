@@ -17,16 +17,10 @@ if [[ ! -z "$PGBOUNCER_AUTH_URL" ]]; then
 	export PGBOUNCER_AUTH_TYPE="pam"
 fi
 
-RELOAD_BASIC_AUTH=""
-if [[ ! -z "$RELOAD_USERNAME" ]] || [[ ! -z "$RELOAD_PASSWORD" ]]; then
-	RELOAD_BASIC_AUTH="-basic-auth=$RELOAD_USERNAME:$RELOAD_PASSWORD"
-fi
-
-if [[ "${RELOAD_NO_AUTH,,}" = "true" ]] || [[ ! -z "$RELOAD_BASIC_AUTH" ]]; then
-	echo "reload api enabled - 0.0.0.0:6488/reload"
-	shell2http -port=6488 "$RELOAD_BASIC_AUTH" /reload "su -c \"echo 'RELOAD' | psql -p 6432 pgbouncer\" pgbouncer" &
+if [[ "${API,,}" = "true" ]]; then
+	node /script.js &
 else
-	echo "reload api disabled"
+	echo "api disabled"
 fi
 
 /opt/bitnami/scripts/pgbouncer/entrypoint.sh $@

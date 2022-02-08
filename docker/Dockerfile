@@ -1,4 +1,4 @@
-FROM bitnami/pgbouncer:latest AS builder
+FROM bitnami/pgbouncer:latest AS pgbouncer-builder
 
 USER root
 
@@ -49,14 +49,31 @@ FROM bitnami/pgbouncer:latest
 
 USER root
 
-COPY --from=builder /usr/local/bin/pgbouncer /opt/bitnami/pgbouncer/bin/pgbouncer
-COPY --from=builder /lib/security/mypam.so /lib/security/mypam.so
+COPY --from=pgbouncer-builder /usr/local/bin/pgbouncer /opt/bitnami/pgbouncer/bin/pgbouncer
+COPY --from=pgbouncer-builder /lib/security/mypam.so /lib/security/mypam.so
   
-RUN curl -L https://github.com/msoap/shell2http/releases/download/v1.14.1/shell2http_1.14.1_linux_amd64.deb -o ./shell2http.deb \
-	&& dpkg -i ./shell2http.deb \
-	&& rm ./shell2http.deb
+############GOLANG INSTALL############
+
+ENV GODIR=$WORKDIR/go
+ENV GOROOT="${GODIR}/goroot"
+ENV GOPATH="${GODIR}/gopath"
+RUN curl -sL https://git.io/vQhTU | bash \
+  && ln -s $HOME/.go $GOROOT \
+  && ln -s $HOME/go $GOPATH \
+  && rm -rf /var/lib/apt/lists/*
+ENV PATH=$GOROOT/bin:$PATH
+ENV PATH=$GOPATH/bin:$PATH
+
+############JAVA INSTALL############
+
+RUN apt-get update \
+  && apt-get install -y openjdk-11-jre-headless \
+  && rm -rf /var/lib/apt/lists/*
+  
+############COPY FILES############
 	
-COPY entrypoint.sh /entrypoint.sh
+COPY $APP_JAR /app.jar
+COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]
