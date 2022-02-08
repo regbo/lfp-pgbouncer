@@ -1,5 +1,4 @@
 #!/bin/bash
-
 set -e
 
 if [[ ! -z "$PGBOUNCER_AUTH_URL" ]]; then
@@ -24,21 +23,3 @@ else
 fi
 
 /opt/bitnami/scripts/pgbouncer/entrypoint.sh $@
-
-# export POSTGRESQL_USERNAME=yugabyte
-# export POSTGRESQL_PASSWORD=yugabyte
-# export POSTGRESQL_DATABASE=yugabyte
-# export POSTGRESQL_HOST=192.168.1.71
-# export POSTGRESQL_PORT=5433
-# export PGBOUNCER_AUTH_URL=http://mockbin.org/bin/1ad4f65c-b9e5-4736-aa56-2309d1d6a828
-
-# docker run -it \
-	# --env "POSTGRESQL_USERNAME=yugabyte" \
-	# --env "POSTGRESQL_PASSWORD=yugabyte" \
-	# --env "POSTGRESQL_DATABASE=yugabyte" \
-	# --env "POSTGRESQL_HOST=192.168.1.71" \
-	# --env "PGBOUNCER_AUTH_USER=yugabyte" \
-	# --env "POSTGRESQL_PORT=5433" \
-	# --env "PGBOUNCER_AUTH_URL=http://mockbin.org/bin/1ad4f65c-b9e5-4736-aa56-2309d1d6a828" \
-	# -p 6432:6432 \
-	# regbo/docker:latest
