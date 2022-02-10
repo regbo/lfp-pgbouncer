@@ -16,10 +16,4 @@ if [[ ! -z "$PGBOUNCER_AUTH_URL" ]]; then
 	export PGBOUNCER_AUTH_TYPE="pam"
 fi
 
-if [[ "${API,,}" = "true" ]]; then
-	node /script.js &
-else
-	echo "api disabled"
-fi
-
 /opt/bitnami/scripts/pgbouncer/entrypoint.sh $@
