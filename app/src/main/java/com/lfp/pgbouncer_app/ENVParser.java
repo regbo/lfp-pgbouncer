@@ -1,13 +1,19 @@
 package com.lfp.pgbouncer_app;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 import org.joda.beans.MetaProperty;
@@ -17,26 +23,68 @@ import com.lfp.caddy.core.config.Storage;
 import com.lfp.data.redis.RedisConfig;
 import com.lfp.data.redisson.client.RedissonClients;
 import com.lfp.joe.beans.JodaBeans;
+import com.lfp.joe.core.config.MachineConfig;
+import com.lfp.joe.core.properties.Configs;
 import com.lfp.joe.serial.Serials;
 import com.lfp.joe.serial.gson.InetSocketAddressJsonSerializer;
 import com.lfp.joe.utils.Utils;
+import com.lfp.joe.utils.time.TimeParser;
+import com.lfp.pgbouncer_app.config.PGBouncerAppConfig;
 
 import one.util.streamex.StreamEx;
 
 public class ENVParser {
+
+	protected ENVParser() {
+
+	}
+
 	private static final Class<?> THIS_CLASS = new Object() {
 	}.getClass().getEnclosingClass();
 	private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(THIS_CLASS);
-	private static final String STORAGE_PREFIX = "STORAGE_";
-	private static final Supplier<Map<String, List<String>>> ENV_MAP_S = Utils.Functions
-			.memoize(() -> Utils.Machine.streamEnvironmentVariables("_", "_FILE").toMap());
+
+	private static final Supplier<Map<String, List<String>>> ENV_MAP_S = Utils.Functions.memoize(() -> {
+		var map = Utils.Machine.streamEnvironmentVariables("_", "_FILE").toMap();
+		if (MachineConfig.isDeveloper()) {
+			var configPrivate = new File("src/main/resources/config-private");
+			if (configPrivate.exists()) {
+				for (var file : configPrivate.listFiles()) {
+					var name = file.getName();
+					var splitAt = Utils.Strings.lastIndexOf(name, ".");
+					String ext;
+					if (splitAt < 0)
+						ext = "";
+					else {
+						ext = name.substring(splitAt + 1);
+						name = name.substring(0, splitAt);
+					}
+					if (Utils.Strings.equalsIgnoreCase(name, "env") || Utils.Strings.equalsIgnoreCase(ext, "env")) {
+						var append = Utils.Machine.streamEnvironmentVariables(new FileInputStream(file), "_", "_FILE")
+								.flatMapValues(Collection::stream);
+						map = Utils.Lots.streamMultimap(map).append(append).distinct().grouping();
+					}
+				}
+
+			}
+		}
+		return Collections.unmodifiableMap(map);
+	}, null);
+
+	public static Optional<InetSocketAddress> getAddress() {
+		return getValue(Configs.get(PGBouncerAppConfig.class).addressEnvironmentVariableName()).flatMap(v -> {
+			var result = InetSocketAddressJsonSerializer.INSTANCE.fromString(v);
+			return Optional.ofNullable(result);
+		});
+	}
+
+	public static Optional<Date> getRefreshBefore() {
+		return getValue(Configs.get(PGBouncerAppConfig.class).refreshBeforeEnvironmentVariableName()).flatMap(v -> {
+			return TimeParser.tryParseDate(v);
+		});
+	}
 
 	public static Optional<String> getStorageAesKey() {
 		return getValue(Storage.meta().aesKey());
-	}
-
-	public static Optional<String> getStorageKeyPrefix() {
-		return getValue(Storage.meta().keyPrefix());
 	}
 
 	public static Optional<RedisConfig> getRedisConfig() {
@@ -48,7 +96,7 @@ public class ENVParser {
 
 	private static StreamEx<URI> streamRedisURIs() {
 		var meta = Storage.meta();
-		boolean tlsEnabled = getValue(meta.tlsEnabled()).map(Boolean.TRUE.toString()::equalsIgnoreCase).orElse(false);
+		boolean tlsEnabled = getValue(meta.tlsEnabled()).map(Boolean.TRUE.toString()::equalsIgnoreCase).orElse(true);
 		String password = getValue(meta.password()).orElse(null);
 		StreamEx<URI> uris = StreamEx.empty();
 		{
@@ -84,38 +132,37 @@ public class ENVParser {
 	}
 
 	private static Optional<String> getValue(MetaProperty<?> metaProperty) {
-		return streamValues(metaProperty).filter(Utils.Strings::isNotBlank).findFirst();
+		return streamNames(metaProperty).map(name -> getValue(name)).mapPartial(Function.identity()).findFirst();
+	}
+
+	private static Optional<String> getValue(String name) {
+		return streamValues(name).filter(Utils.Strings::isNotBlank).findFirst();
 	}
 
 	private static StreamEx<String> streamValues(MetaProperty<?> metaProperty) {
-		var valueStream = streamNames(metaProperty).map(name -> {
-			var estream = Utils.Lots.streamMultimap(ENV_MAP_S.get());
-			estream = estream.filterKeys(v -> {
-				return Utils.Strings.equalsIgnoreCase(v, name);
-			});
-			return estream.values();
-		}).chain(Utils.Lots::flatMap);
-		return valueStream;
+		return streamNames(metaProperty).map(name -> streamValues(name)).chain(Utils.Lots::flatMap);
+	}
+
+	private static StreamEx<String> streamValues(String name) {
+		var estream = Utils.Lots.streamMultimap(ENV_MAP_S.get());
+		estream = estream.filterKeys(v -> {
+			return Utils.Strings.equalsIgnoreCase(v, name);
+		});
+		return estream.values();
 	}
 
 	private static StreamEx<String> streamNames(MetaProperty<?> metaProperty) {
 		if (metaProperty == null)
 			return StreamEx.empty();
-		List<String> nameList;
-		{
-			var nameStream = JodaBeans.streamNames(metaProperty);
-			var annos = metaProperty.annotations();
-			if (annos != null)
-				nameStream = nameStream
-						.append(StreamEx.of(annos).select(SerializedName.class).map(SerializedName::value));
-			nameStream = nameStream.filter(Utils.Strings::isNotBlank);
-			nameStream = nameStream.distinct();
-			nameList = nameStream.toList();
-		}
-		var resultStream = Utils.Lots.stream(nameList).map(v -> STORAGE_PREFIX + v);
-		resultStream = resultStream.append(nameList);
-		resultStream = resultStream.distinct();
-		return resultStream;
+		StreamEx<String> nameStream = JodaBeans.streamNames(metaProperty);
+		var annos = metaProperty.annotations();
+		if (annos != null)
+			nameStream = nameStream.append(StreamEx.of(annos).select(SerializedName.class).map(SerializedName::value));
+		nameStream = nameStream.filter(Utils.Strings::isNotBlank);
+		var prefix = Configs.get(PGBouncerAppConfig.class).storageEnvironmentVariablePrefix();
+		nameStream = nameStream.map(v -> prefix + v);
+		nameStream = nameStream.distinct();
+		return nameStream;
 	}
 
 	public static void main(String[] args) throws IOException {
