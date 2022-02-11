@@ -71,7 +71,8 @@ public class ENVParser {
 	}, null);
 
 	public static Optional<InetSocketAddress> getAddress() {
-		return getValue(Configs.get(PGBouncerAppConfig.class).addressEnvironmentVariableName()).flatMap(v -> {
+		var name = Configs.get(PGBouncerAppConfig.class).addressEnvironmentVariableName();
+		return getValue(name).flatMap(v -> {
 			var result = InetSocketAddressJsonSerializer.INSTANCE.fromString(v);
 			return Optional.ofNullable(result);
 		});
@@ -88,7 +89,8 @@ public class ENVParser {
 	}
 
 	public static Optional<Date> getStorageKeyPrefixRefreshBefore() {
-		return getValue(Configs.get(PGBouncerAppConfig.class).refreshBeforeEnvironmentVariableName()).flatMap(v -> {
+		var name = Configs.get(PGBouncerAppConfig.class).storageRefreshBeforeEnvironmentVariableName();
+		return getValue(name).flatMap(v -> {
 			return TimeParser.tryParseDate(v);
 		});
 	}

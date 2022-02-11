@@ -7,8 +7,8 @@ public interface PGBouncerAppConfig extends Config {
 	@DefaultValue("ADDRESS")
 	String addressEnvironmentVariableName();
 
-	@DefaultValue("STORAGE_KEY_PREFIX_REFRESH_BEFORE")
-	String refreshBeforeEnvironmentVariableName();
+	@DefaultValue("${storageEnvironmentVariablePrefix}KEY_PREFIX_REFRESH_BEFORE")
+	String storageRefreshBeforeEnvironmentVariableName();
 
 	@DefaultValue("STORAGE_")
 	String storageEnvironmentVariablePrefix();

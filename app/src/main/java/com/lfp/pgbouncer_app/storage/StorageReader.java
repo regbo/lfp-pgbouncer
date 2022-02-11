@@ -1,4 +1,4 @@
-package com.lfp.pgbouncer_app;
+package com.lfp.pgbouncer_app.storage;
 
 import java.util.Date;
 import java.util.Map;
@@ -32,7 +32,7 @@ import com.lfp.joe.serial.Serials;
 import com.lfp.joe.utils.Utils;
 import com.lfp.joe.utils.crypto.Hashable;
 import com.lfp.joe.utils.time.TimeParser;
-import com.lfp.pgbouncer_app.StorageCrypto.DecryptException;
+import com.lfp.pgbouncer_app.storage.StorageCrypto.DecryptException;
 
 import at.favre.lib.bytes.Bytes;
 import one.util.streamex.StreamEx;

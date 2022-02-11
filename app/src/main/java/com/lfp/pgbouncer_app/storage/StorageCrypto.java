@@ -1,4 +1,4 @@
-package com.lfp.pgbouncer_app;
+package com.lfp.pgbouncer_app.storage;
 
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
@@ -11,6 +11,7 @@ import javax.crypto.spec.SecretKeySpec;
 
 import com.lfp.joe.core.cache.Instances;
 import com.lfp.joe.core.function.Asserts;
+import com.lfp.pgbouncer_app.ENVParser;
 
 public class StorageCrypto {
 

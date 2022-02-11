@@ -1,4 +1,4 @@
-package com.lfp.pgbouncer_app;
+package com.lfp.pgbouncer_app.cert;
 
 import java.util.Date;
 import java.util.Map;
@@ -18,6 +18,7 @@ import com.lfp.joe.beans.JodaBeans;
 import com.lfp.joe.serial.Serials;
 import com.lfp.joe.utils.Utils;
 import com.lfp.joe.utils.crypto.Hashable;
+import com.lfp.pgbouncer_app.storage.StorageReader;
 
 import at.favre.lib.bytes.Bytes;
 import one.util.streamex.StreamEx;
