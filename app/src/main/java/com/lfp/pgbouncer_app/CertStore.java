@@ -1,19 +1,14 @@
 package com.lfp.pgbouncer_app;
 
+import java.util.Date;
 import java.util.Map;
-import java.util.NoSuchElementException;
 import java.util.Optional;
-import java.util.Set;
 
 import org.joda.beans.Bean;
 import org.joda.beans.BeanDefinition;
-import org.joda.beans.ImmutableBean;
 import org.joda.beans.JodaBeanUtils;
 import org.joda.beans.MetaProperty;
-import org.joda.beans.Property;
 import org.joda.beans.PropertyDefinition;
-import org.joda.beans.impl.direct.DirectFieldsBeanBuilder;
-import org.joda.beans.impl.direct.DirectMetaBean;
 import org.joda.beans.impl.direct.DirectMetaProperty;
 import org.joda.beans.impl.direct.DirectMetaPropertyMap;
 
@@ -27,14 +22,8 @@ import com.lfp.joe.utils.crypto.Hashable;
 import at.favre.lib.bytes.Bytes;
 import one.util.streamex.StreamEx;
 
-@BeanDefinition
-public class CertStore implements ImmutableBean, Hashable {
-
-	@PropertyDefinition(validate = "notEmpty")
-	private final String service;
-
-	@PropertyDefinition(validate = "notEmpty")
-	private final String domain;
+@BeanDefinition(hierarchy = "immutable")
+public class CertStore extends CertGroup implements Hashable {
 
 	@PropertyDefinition(validate = "notNull")
 	private final StorageReader properties;
@@ -48,6 +37,13 @@ public class CertStore implements ImmutableBean, Hashable {
 	@Override
 	public Bytes hash() {
 		return Utils.Crypto.hashMD5(getService(), getDomain(), getProperties(), getKey(), getCert());
+	}
+
+	public Optional<Date> getModified() {
+		var mpStream = StreamEx.of(meta().properties, meta().key(), meta().cert());
+		var dateStream = mpStream.map(v -> v.get(this)).nonNull().mapPartial(v -> v.getModified());
+		dateStream = dateStream.sortedBy(v -> -1 * v.getTime());
+		return dateStream.findFirst();
 	}
 
 	private transient JsonElement _propertiesJson;
@@ -114,13 +110,10 @@ public class CertStore implements ImmutableBean, Hashable {
 	 * @param builder the builder to copy from, not null
 	 */
 	protected CertStore(CertStore.Builder builder) {
-		JodaBeanUtils.notEmpty(builder.service, "service");
-		JodaBeanUtils.notEmpty(builder.domain, "domain");
+		super(builder);
 		JodaBeanUtils.notNull(builder.properties, "properties");
 		JodaBeanUtils.notNull(builder.key, "key");
 		JodaBeanUtils.notNull(builder.cert, "cert");
-		this.service = builder.service;
-		this.domain = builder.domain;
 		this.properties = builder.properties;
 		this.key = builder.key;
 		this.cert = builder.cert;
@@ -129,36 +122,6 @@ public class CertStore implements ImmutableBean, Hashable {
 	@Override
 	public CertStore.Meta metaBean() {
 		return CertStore.Meta.INSTANCE;
-	}
-
-	@Override
-	public <R> Property<R> property(String propertyName) {
-		return metaBean().<R>metaProperty(propertyName).createProperty(this);
-	}
-
-	@Override
-	public Set<String> propertyNames() {
-		return metaBean().metaPropertyMap().keySet();
-	}
-
-	// -----------------------------------------------------------------------
-	/**
-	 * Gets the service.
-	 * 
-	 * @return the value of the property, not empty
-	 */
-	public String getService() {
-		return service;
-	}
-
-	// -----------------------------------------------------------------------
-	/**
-	 * Gets the domain.
-	 * 
-	 * @return the value of the property, not empty
-	 */
-	public String getDomain() {
-		return domain;
 	}
 
 	// -----------------------------------------------------------------------
@@ -197,6 +160,7 @@ public class CertStore implements ImmutableBean, Hashable {
 	 * 
 	 * @return the mutable builder, not null
 	 */
+	@Override
 	public Builder toBuilder() {
 		return new Builder(this);
 	}
@@ -208,27 +172,24 @@ public class CertStore implements ImmutableBean, Hashable {
 		}
 		if (obj != null && obj.getClass() == this.getClass()) {
 			CertStore other = (CertStore) obj;
-			return JodaBeanUtils.equal(service, other.service) && JodaBeanUtils.equal(domain, other.domain)
-					&& JodaBeanUtils.equal(properties, other.properties) && JodaBeanUtils.equal(key, other.key)
-					&& JodaBeanUtils.equal(cert, other.cert);
+			return JodaBeanUtils.equal(properties, other.properties) && JodaBeanUtils.equal(key, other.key)
+					&& JodaBeanUtils.equal(cert, other.cert) && super.equals(obj);
 		}
 		return false;
 	}
 
 	@Override
 	public int hashCode() {
-		int hash = getClass().hashCode();
-		hash = hash * 31 + JodaBeanUtils.hashCode(service);
-		hash = hash * 31 + JodaBeanUtils.hashCode(domain);
+		int hash = 7;
 		hash = hash * 31 + JodaBeanUtils.hashCode(properties);
 		hash = hash * 31 + JodaBeanUtils.hashCode(key);
 		hash = hash * 31 + JodaBeanUtils.hashCode(cert);
-		return hash;
+		return hash ^ super.hashCode();
 	}
 
 	@Override
 	public String toString() {
-		StringBuilder buf = new StringBuilder(192);
+		StringBuilder buf = new StringBuilder(128);
 		buf.append("CertStore{");
 		int len = buf.length();
 		toString(buf);
@@ -239,9 +200,9 @@ public class CertStore implements ImmutableBean, Hashable {
 		return buf.toString();
 	}
 
+	@Override
 	protected void toString(StringBuilder buf) {
-		buf.append("service").append('=').append(JodaBeanUtils.toString(service)).append(',').append(' ');
-		buf.append("domain").append('=').append(JodaBeanUtils.toString(domain)).append(',').append(' ');
+		super.toString(buf);
 		buf.append("properties").append('=').append(JodaBeanUtils.toString(properties)).append(',').append(' ');
 		buf.append("key").append('=').append(JodaBeanUtils.toString(key)).append(',').append(' ');
 		buf.append("cert").append('=').append(JodaBeanUtils.toString(cert)).append(',').append(' ');
@@ -251,22 +212,12 @@ public class CertStore implements ImmutableBean, Hashable {
 	/**
 	 * The meta-bean for {@code CertStore}.
 	 */
-	public static class Meta extends DirectMetaBean {
+	public static class Meta extends CertGroup.Meta {
 		/**
 		 * The singleton instance of the meta-bean.
 		 */
 		static final Meta INSTANCE = new Meta();
 
-		/**
-		 * The meta-property for the {@code service} property.
-		 */
-		private final MetaProperty<String> service = DirectMetaProperty.ofImmutable(this, "service", CertStore.class,
-				String.class);
-		/**
-		 * The meta-property for the {@code domain} property.
-		 */
-		private final MetaProperty<String> domain = DirectMetaProperty.ofImmutable(this, "domain", CertStore.class,
-				String.class);
 		/**
 		 * The meta-property for the {@code properties} property.
 		 */
@@ -285,8 +236,8 @@ public class CertStore implements ImmutableBean, Hashable {
 		/**
 		 * The meta-properties.
 		 */
-		private final Map<String, MetaProperty<?>> metaPropertyMap$ = new DirectMetaPropertyMap(this, null, "service",
-				"domain", "properties", "key", "cert");
+		private final Map<String, MetaProperty<?>> metaPropertyMap$ = new DirectMetaPropertyMap(this,
+				(DirectMetaPropertyMap) super.metaPropertyMap(), "properties", "key", "cert");
 
 		/**
 		 * Restricted constructor.
@@ -297,10 +248,6 @@ public class CertStore implements ImmutableBean, Hashable {
 		@Override
 		protected MetaProperty<?> metaPropertyGet(String propertyName) {
 			switch (propertyName.hashCode()) {
-			case 1984153269: // service
-				return service;
-			case -1326197564: // domain
-				return domain;
 			case -926053069: // properties
 				return properties;
 			case 106079: // key
@@ -327,24 +274,6 @@ public class CertStore implements ImmutableBean, Hashable {
 		}
 
 		// -----------------------------------------------------------------------
-		/**
-		 * The meta-property for the {@code service} property.
-		 * 
-		 * @return the meta-property, not null
-		 */
-		public final MetaProperty<String> service() {
-			return service;
-		}
-
-		/**
-		 * The meta-property for the {@code domain} property.
-		 * 
-		 * @return the meta-property, not null
-		 */
-		public final MetaProperty<String> domain() {
-			return domain;
-		}
-
 		/**
 		 * The meta-property for the {@code properties} property.
 		 * 
@@ -376,10 +305,6 @@ public class CertStore implements ImmutableBean, Hashable {
 		@Override
 		protected Object propertyGet(Bean bean, String propertyName, boolean quiet) {
 			switch (propertyName.hashCode()) {
-			case 1984153269: // service
-				return ((CertStore) bean).getService();
-			case -1326197564: // domain
-				return ((CertStore) bean).getDomain();
 			case -926053069: // properties
 				return ((CertStore) bean).getProperties();
 			case 106079: // key
@@ -405,10 +330,8 @@ public class CertStore implements ImmutableBean, Hashable {
 	/**
 	 * The bean-builder for {@code CertStore}.
 	 */
-	public static class Builder extends DirectFieldsBeanBuilder<CertStore> {
+	public static class Builder extends CertGroup.Builder {
 
-		private String service;
-		private String domain;
 		private StorageReader properties;
 		private StorageReader key;
 		private StorageReader cert;
@@ -425,8 +348,7 @@ public class CertStore implements ImmutableBean, Hashable {
 		 * @param beanToCopy the bean to copy from, not null
 		 */
 		protected Builder(CertStore beanToCopy) {
-			this.service = beanToCopy.getService();
-			this.domain = beanToCopy.getDomain();
+			super(beanToCopy);
 			this.properties = beanToCopy.getProperties();
 			this.key = beanToCopy.getKey();
 			this.cert = beanToCopy.getCert();
@@ -436,10 +358,6 @@ public class CertStore implements ImmutableBean, Hashable {
 		@Override
 		public Object get(String propertyName) {
 			switch (propertyName.hashCode()) {
-			case 1984153269: // service
-				return service;
-			case -1326197564: // domain
-				return domain;
 			case -926053069: // properties
 				return properties;
 			case 106079: // key
@@ -447,19 +365,13 @@ public class CertStore implements ImmutableBean, Hashable {
 			case 3050020: // cert
 				return cert;
 			default:
-				throw new NoSuchElementException("Unknown property: " + propertyName);
+				return super.get(propertyName);
 			}
 		}
 
 		@Override
 		public Builder set(String propertyName, Object newValue) {
 			switch (propertyName.hashCode()) {
-			case 1984153269: // service
-				this.service = (String) newValue;
-				break;
-			case -1326197564: // domain
-				this.domain = (String) newValue;
-				break;
 			case -926053069: // properties
 				this.properties = (StorageReader) newValue;
 				break;
@@ -470,7 +382,8 @@ public class CertStore implements ImmutableBean, Hashable {
 				this.cert = (StorageReader) newValue;
 				break;
 			default:
-				throw new NoSuchElementException("Unknown property: " + propertyName);
+				super.set(propertyName, newValue);
+				break;
 			}
 			return this;
 		}
@@ -518,30 +431,6 @@ public class CertStore implements ImmutableBean, Hashable {
 
 		// -----------------------------------------------------------------------
 		/**
-		 * Sets the service.
-		 * 
-		 * @param service the new value, not empty
-		 * @return this, for chaining, not null
-		 */
-		public Builder service(String service) {
-			JodaBeanUtils.notEmpty(service, "service");
-			this.service = service;
-			return this;
-		}
-
-		/**
-		 * Sets the domain.
-		 * 
-		 * @param domain the new value, not empty
-		 * @return this, for chaining, not null
-		 */
-		public Builder domain(String domain) {
-			JodaBeanUtils.notEmpty(domain, "domain");
-			this.domain = domain;
-			return this;
-		}
-
-		/**
 		 * Sets the properties.
 		 * 
 		 * @param properties the new value, not null
@@ -580,7 +469,7 @@ public class CertStore implements ImmutableBean, Hashable {
 		// -----------------------------------------------------------------------
 		@Override
 		public String toString() {
-			StringBuilder buf = new StringBuilder(192);
+			StringBuilder buf = new StringBuilder(128);
 			buf.append("CertStore.Builder{");
 			int len = buf.length();
 			toString(buf);
@@ -591,9 +480,9 @@ public class CertStore implements ImmutableBean, Hashable {
 			return buf.toString();
 		}
 
+		@Override
 		protected void toString(StringBuilder buf) {
-			buf.append("service").append('=').append(JodaBeanUtils.toString(service)).append(',').append(' ');
-			buf.append("domain").append('=').append(JodaBeanUtils.toString(domain)).append(',').append(' ');
+			super.toString(buf);
 			buf.append("properties").append('=').append(JodaBeanUtils.toString(properties)).append(',').append(' ');
 			buf.append("key").append('=').append(JodaBeanUtils.toString(key)).append(',').append(' ');
 			buf.append("cert").append('=').append(JodaBeanUtils.toString(cert)).append(',').append(' ');

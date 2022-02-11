@@ -29,7 +29,8 @@ public class KeyPrefixService {
 			var redisConfig = ENVParser.getRedisConfig().get();
 			var client = RedissonClients.get(redisConfig);
 			var address = ENVParser.getAddress().get();
-			return new KeyPrefixService(client, address.getHostString(), ENVParser.getRefreshBefore().orElse(null));
+			return new KeyPrefixService(client, address.getHostString(),
+					ENVParser.getStorageKeyPrefixRefreshBefore().orElse(null));
 		});
 	}
 
@@ -57,8 +58,11 @@ public class KeyPrefixService {
 	public String getKeyPrefix() {
 		if (_value == null)
 			synchronized (this) {
-				if (_value == null)
-					_value = Threads.Futures.getUnchecked(getOrCreateValue()).getValue();
+				if (_value == null) {
+					_value = ENVParser.getStorageKeyPrefix().orElseGet(() -> {
+						return Threads.Futures.getUnchecked(getOrCreateValue()).getValue();
+					});
+				}
 			}
 		return _value;
 	}
