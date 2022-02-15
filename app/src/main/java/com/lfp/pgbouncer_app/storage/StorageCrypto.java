@@ -11,25 +11,28 @@ import javax.crypto.spec.SecretKeySpec;
 
 import com.lfp.joe.core.cache.Instances;
 import com.lfp.joe.core.function.Asserts;
-import com.lfp.pgbouncer_app.ENVParser;
+import com.lfp.joe.core.properties.Configs;
+import com.lfp.joe.utils.Utils;
+import com.lfp.joe.utils.function.Requires;
+import com.lfp.pgbouncer_app.config.PGBouncerAppConfig;
 
 public class StorageCrypto {
 
 	public static Optional<StorageCrypto> tryGet() {
 		return Instances.get(StorageCrypto.class.getName() + "#" + Optional.class.getName(), () -> {
-			var aesSecret = ENVParser.getStorageAesKey().orElse(null);
-			if (aesSecret == null)
+			var storageAESKey = Configs.get(PGBouncerAppConfig.class).storageAESKey();
+			if (Utils.Strings.isBlank(storageAESKey))
 				return Optional.empty();
-			return Optional.of(new StorageCrypto(aesSecret));
+			return Optional.of(new StorageCrypto(storageAESKey));
 		});
 	}
 
 	private final static int GCM_IV_LENGTH = 12;
 	private final static int GCM_TAG_LENGTH = 16;
-	private final SecretKeySpec secretKey;
+	private final String aesSecret;
 
 	public StorageCrypto(String aesSecret) {
-		this.secretKey = new SecretKeySpec(aesSecret.getBytes(StandardCharsets.UTF_8), "AES");
+		this.aesSecret = Requires.notBlank(aesSecret);
 	}
 
 	public byte[] decrypt(byte[] encrypted) throws DecryptException {
@@ -37,6 +40,7 @@ public class StorageCrypto {
 			byte[] iv = Arrays.copyOfRange(encrypted, 0, GCM_IV_LENGTH);
 			Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
 			GCMParameterSpec ivSpec = new GCMParameterSpec(GCM_TAG_LENGTH * Byte.SIZE, iv);
+			var secretKey = new SecretKeySpec(aesSecret.getBytes(StandardCharsets.UTF_8), "AES");
 			cipher.init(Cipher.DECRYPT_MODE, secretKey, ivSpec);
 			return cipher.doFinal(encrypted, GCM_IV_LENGTH, encrypted.length - GCM_IV_LENGTH);
 		} catch (Throwable t) {
@@ -51,6 +55,10 @@ public class StorageCrypto {
 		} catch (DecryptException e) {
 			return Optional.empty();
 		}
+	}
+
+	public String getAesSecret() {
+		return aesSecret;
 	}
 
 	@SuppressWarnings("serial")

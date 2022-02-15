@@ -9,10 +9,10 @@
 	<artifactId>pgbouncer_app</artifactId>
 	<name>${project.groupId}.${project.artifactId}</name>
 	<properties>
-		<com.lfp.connect.version>7.7.5-RELEASE</com.lfp.connect.version>
+		<com.lfp.connect.version>7.7.7-RELEASE</com.lfp.connect.version>
 		<java.version>11</java.version>
 		<maven.build.timestamp.format>yyyy-MM-dd-HH-mm-ss</maven.build.timestamp.format>
-		<com.lfp.data.version>8.5.5-RELEASE</com.lfp.data.version>
+		<com.lfp.data.version>8.5.7-RELEASE</com.lfp.data.version>
 		<start-class>${project.groupId}.${project.artifactId}.App</start-class>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 	</properties>
@@ -24,7 +24,22 @@
 		</dependency>
 		<dependency>
 			<groupId>com.lfp</groupId>
+			<artifactId>joe-jwt</artifactId>
+			<version>${com.lfp.joe.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>com.lfp</groupId>
 			<artifactId>connect-caddy-run</artifactId>
+			<version>${com.lfp.connect.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>com.lfp</groupId>
+			<artifactId>connect-undertow-core</artifactId>
+			<version>${com.lfp.connect.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>com.lfp</groupId>
+			<artifactId>connect-undertow-retrofit</artifactId>
 			<version>${com.lfp.connect.version}</version>
 		</dependency>
 		<dependency>
@@ -36,6 +51,12 @@
 			<groupId>com.lfp</groupId>
 			<artifactId>data-redisson-tools</artifactId>
 			<version>${com.lfp.data.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>com.lfp</groupId>
+			<artifactId>joe-retrofit-client</artifactId>
+			<version>${com.lfp.joe.version}</version>
+			<scope>test</scope>
 		</dependency>
 	</dependencies>
 	<build>
