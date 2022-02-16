@@ -6,22 +6,29 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 
 import com.lfp.joe.core.function.Muto;
 import com.lfp.joe.core.function.Scrapable;
+import com.lfp.joe.core.io.CloseableFile;
 import com.lfp.joe.core.process.Callbacks;
 import com.lfp.joe.core.properties.Configs;
 import com.lfp.joe.net.http.ip.IPs;
 import com.lfp.joe.net.socket.socks.Sockets;
 import com.lfp.joe.process.Procs;
 import com.lfp.joe.process.PromiseProcess;
+import com.lfp.joe.threads.Threads;
 import com.lfp.joe.utils.Utils;
 import com.lfp.joe.utils.function.Requires;
 import com.lfp.pgbouncer_app.cert.CertStore;
+import com.lfp.pgbouncer_app.cert.CertSummary;
+import com.lfp.pgbouncer_app.config.PGBouncerAppConfig;
 import com.lfp.pgbouncer_app.config.PGBouncerExecConfig;
 
 import at.favre.lib.bytes.Bytes;
@@ -32,17 +39,20 @@ public class PGBouncerExecService extends Scrapable.Impl {
 	private static final Class<?> THIS_CLASS = new Object() {
 	}.getClass().getEnclosingClass();
 	private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(THIS_CLASS);
+
 	private static final String PAM_MODULE_PATH = "/lib/security/mypam.so";
 	private static final String PAM_COMMON_AUTH_PATH = "/etc/pam.d/common-auth";
-	private static final String ADMIN_DATABASE_USER = "postgres";
-	private static final String ADMIN_UNIX_USER = "postgres";
+	private static final String ADMIN_DATABASE_USER = "pgbouncer";
+	private static final String ADMIN_UNIX_USER = "pgbouncer";
 	private static final String ENV_READ_FILE_POSTFIX = "_FILE";
-	private final PGBouncerIni pgBouncerIni;
-	private final PromiseProcess process;
+	private static final String PGBOUNCER_CLIENT_TLS_SSLMODE = "require";
+	private static final Entry<Bytes, Bytes> DUMMY_CERT_ENTRY = generateDummyCertEntry();
+	private final Muto<PromiseProcess> processMuto = Muto.create();
+	private final String[] args;
 	private final InetSocketAddress pgBouncerAddress;
 
 	public PGBouncerExecService(InetSocketAddress authenticatorAdress, String... args) throws IOException {
-		this.pgBouncerIni = new PGBouncerIni(Configs.get(PGBouncerExecConfig.class).confIni());
+		this.args = args;
 		Objects.requireNonNull(authenticatorAdress);
 		{// prepare pam
 			var prepend = new ArrayList<String>();
@@ -59,70 +69,109 @@ public class PGBouncerExecService extends Scrapable.Impl {
 				is.transferTo(fos);
 			}
 		}
-		this.pgBouncerAddress = new InetSocketAddress(IPs.getLocalIPAddress(), Sockets.allocatePort());
-		{// start process
-			var environmentVariables = Utils.Machine.getEnvironmentVariables(ENV_READ_FILE_POSTFIX);
-			environmentVariables.put("PGBOUNCER_AUTH_TYPE", "pam");
-			environmentVariables.put("PGBOUNCER_BIND_ADDRESS", this.pgBouncerAddress.getHostString());
-			environmentVariables.put("PGBOUNCER_PORT", Objects.toString(this.pgBouncerAddress.getPort()));
-			String command = Configs.get(PGBouncerExecConfig.class).pgBouncerExec().getAbsolutePath();
-			if (args != null)
-				command = StreamEx.of(command).append(args).joining(" ");
-			this.process = Procs.start(command, null, environmentVariables);
-			this.onScrap(() -> this.process.cancel(true));
-			this.process.whenComplete(Callbacks.listener(this::scrap));
-			logger.info("pgbouncer started:{}", this.pgBouncerAddress);
-		}
+		this.pgBouncerAddress = InetSocketAddress.createUnresolved(IPs.getLocalIPAddress(), Sockets.allocatePort());
 	}
 
 	public void reload() throws IOException {
-		logger.info("reload started");
-		String command = String.format("su -c \"echo RELOAD | %s -p %s %s\" %s",
-				Configs.get(PGBouncerExecConfig.class).psqlExec().getAbsolutePath(), this.pgBouncerAddress.getPort(),
-				ADMIN_DATABASE_USER, ADMIN_UNIX_USER);
-		var output = Procs.execute(command, ctx -> {
-			ctx.readOutput(true);
-			ctx.exitValueNormal();
-		}).outputUTF8();
-		output = Utils.Strings.trimToNull(output);
-		Requires.isTrue(Utils.Strings.equalsIgnoreCase(output, "reload"), "reload failed:%s", output);
-		logger.info("reload complete");
+		processMuto.acceptLocked(process -> {
+			if (process == null)
+				return;
+			logger.info("reload started");
+			String command = String.format("su -c \"echo RELOAD | %s -p %s %s\" %s",
+					Configs.get(PGBouncerExecConfig.class).psqlExec().getAbsolutePath(),
+					this.pgBouncerAddress.getPort(), ADMIN_DATABASE_USER, ADMIN_UNIX_USER);
+			String output;
+			try {
+				output = Procs.execute(command, ctx -> {
+					ctx.readOutput(true);
+					ctx.exitValueNormal();
+				}).outputUTF8();
+			} catch (IOException e) {
+				throw RuntimeException.class.isInstance(e) ? RuntimeException.class.cast(e) : new RuntimeException(e);
+			}
+			output = Utils.Strings.trimToNull(output);
+			Requires.isTrue(Utils.Strings.equalsIgnoreCase(output, "reload"), "reload failed:%s", output);
+			logger.info("reload complete");
+		});
 	}
 
 	public boolean setClientTLS(CertStore certStore) throws IOException {
-		var fileWrite = Muto.createBoo();
-		var configWrite = this.pgBouncerIni.access((reader, writer) -> {
-			var cfg = Configs.get(PGBouncerExecConfig.class);
-			Map<File, Bytes> fileToValueMap = new LinkedHashMap<>();
-			fileToValueMap.put(cfg.clientTlsKeyFile(), certStore == null ? null : certStore.getKey().getValue());
-			fileToValueMap.put(cfg.clientTlsCertFile(), certStore == null ? null : certStore.getCert().getValue());
-			for (var ent : fileToValueMap.entrySet()) {
-				var file = ent.getKey();
-				var value = ent.getValue();
-				if (writeToFile(value, file))
-					fileWrite.set(true);
-				var iniKey = Utils.Files.getNameAndExtension(file).getKey();
-				var iniValue = file.exists() ? file.getAbsolutePath() : null;
-				writer.accept(iniKey, iniValue);
-			}
-		});
-		if (fileWrite.isTrue() || configWrite) {
-			reload();
-			return true;
+		var cfg = Configs.get(PGBouncerExecConfig.class);
+		var keyFile = cfg.clientTlsKeyFile();
+		var certFile = cfg.clientTlsCertFile();
+		boolean dummyCerts;
+		Bytes keyValue;
+		Bytes certValue;
+		if (certStore == null) {
+			keyValue = DUMMY_CERT_ENTRY.getKey();
+			certValue = DUMMY_CERT_ENTRY.getValue();
+			dummyCerts = true;
+		} else {
+			keyValue = certStore.getKey().getValue();
+			certValue = certStore.getCert().getValue();
+			dummyCerts = false;
 		}
-		return false;
+		boolean mod = false;
+		if (writeToFile(keyValue, keyFile))
+			mod = true;
+		if (writeToFile(certValue, certFile))
+			mod = true;
+		if (mod) {
+			if (!dummyCerts)
+				logCertificateSummary(keyValue, certValue);
+			reload();
+		}
+		return mod;
 	}
 
-	public PromiseProcess getProcess() {
-		return process;
+	public PromiseProcess start() {
+		return processMuto.updateLockedGet(v -> v == null, nil -> {
+			try {
+				return createProcess();
+			} catch (IOException e) {
+				throw RuntimeException.class.isInstance(e) ? RuntimeException.class.cast(e) : new RuntimeException(e);
+			}
+		});
 	}
 
 	public InetSocketAddress getPgBouncerAddress() {
 		return pgBouncerAddress;
 	}
 
-	public PGBouncerIni getPgBouncerIni() {
-		return pgBouncerIni;
+	protected PromiseProcess createProcess() throws IOException {
+		var cfg = Configs.get(PGBouncerExecConfig.class);
+		setClientTLS(null);
+		// start process
+		var environmentVariables = new LinkedHashMap<>(Utils.Machine.getEnvironmentVariables(ENV_READ_FILE_POSTFIX));
+		environmentVariables.put("PGBOUNCER_AUTH_TYPE", "pam");
+		environmentVariables.put("PGBOUNCER_BIND_ADDRESS", this.pgBouncerAddress.getHostString());
+		environmentVariables.put("PGBOUNCER_PORT", Objects.toString(this.pgBouncerAddress.getPort()));
+		environmentVariables.put("PGBOUNCER_CLIENT_TLS_SSLMODE", PGBOUNCER_CLIENT_TLS_SSLMODE);
+		environmentVariables.put("PGBOUNCER_CLIENT_TLS_KEY_FILE", cfg.clientTlsKeyFile().getAbsolutePath());
+		environmentVariables.put("PGBOUNCER_CLIENT_TLS_CERT_FILE", cfg.clientTlsCertFile().getAbsolutePath());
+		String command = cfg.pgBouncerExec().getAbsolutePath();
+		var argsStream = Utils.Lots.stream(args).filter(Utils.Strings::isNotBlank)
+				.ifEmpty(Utils.Lots.defer(() -> cfg.pgBouncerArgumentsDefault()));
+		command = StreamEx.of(command).append(argsStream).joining(" ");
+		var process = Procs.start(command, null, environmentVariables);
+		this.onScrap(() -> process.cancel(true));
+		process.whenComplete(Callbacks.listener(this::scrap));
+		logger.info("pgbouncer started:{}", this.pgBouncerAddress);
+		var startupTimeout = cfg.startupTimeout();
+		if (startupTimeout != null) {
+			var startupTimeoutAt = Utils.Times.nowDate(zdt -> zdt.plus(startupTimeout));
+			boolean pgBouncerServiceReady = false;
+			for (int i = 0; !pgBouncerServiceReady && new Date().before(startupTimeoutAt); i++) {
+				if (i > 0)
+					Threads.sleepUnchecked(Duration.ofSeconds(3));
+				pgBouncerServiceReady = Sockets.isServerPortOpen(this.pgBouncerAddress.getHostName(),
+						this.pgBouncerAddress.getPort());
+				logger.info("pgBouncer status ready:{}", pgBouncerServiceReady);
+			}
+			Requires.isTrue(pgBouncerServiceReady, "pgBouncer startup timed out after %sms", startupTimeout.toMillis());
+		}
+
+		return process;
 	}
 
 	private static boolean writeToFile(Bytes content, File file) throws FileNotFoundException, IOException {
@@ -141,11 +190,50 @@ public class PGBouncerExecService extends Scrapable.Impl {
 		}
 		if (Objects.equals(currentHash, contentHash))
 			return false;
+		file.getParentFile().mkdirs();
 		try (var is = content.inputStream(); var fos = new FileOutputStream(file)) {
 			is.transferTo(fos);
 		}
 		return true;
+	}
 
+	private static Entry<Bytes, Bytes> generateDummyCertEntry() {
+		var directory = CloseableFile
+				.from(Utils.Files.tempFile(THIS_CLASS, "dummy-certs", Utils.Crypto.getSecureRandomString()));
+		directory.mkdirs();
+		try (directory) {
+			var days = 365 * 25;
+			var dns = "dummy-" + Utils.Crypto.getSecureRandomString() + ".com";
+			var keyFile = new File(directory, "dummy.key");
+			var certFile = new File(directory, "dummy.cert");
+			var commandTemplate = "openssl req -x509 -newkey rsa:4096 -sha256 -days {{{DAYS}}} -nodes -keyout {{{KEY_FILE}}} -out {{{CERT_FILE}}} -subj \"/CN={{{DNS}}}\" -addext \"subjectAltName=DNS:{{{DNS}}}\"";
+			var command = Utils.Strings.templateApply(commandTemplate, "DAYS", days, "DNS", dns, "KEY_FILE",
+					keyFile.getName(), "CERT_FILE", certFile.getName());
+			Procs.execute(command, directory);
+			var keyValue = Utils.Bits.from(keyFile);
+			var certValue = Utils.Bits.from(certFile);
+			return Map.entry(keyValue, certValue);
+		} catch (IOException e) {
+			throw RuntimeException.class.isInstance(e) ? RuntimeException.class.cast(e) : new RuntimeException(e);
+		}
+	}
+
+	private static void logCertificateSummary(Bytes keyValue, Bytes certValue) {
+		if (!Configs.get(PGBouncerAppConfig.class).logCertificateSummaries())
+			return;
+		logCertificateSummary(keyValue, "KEY");
+		logCertificateSummary(certValue, "CERT");
+	}
+
+	private static void logCertificateSummary(Bytes certValue, String name) {
+		var summary = CertSummary.get(certValue);
+		logger.info("{} Updated --------------------------\n{}", name, summary);
+	}
+
+	public static void main(String[] args) {
+		var dummyCert = generateDummyCertEntry().getValue();
+		var summary = CertSummary.get(dummyCert);
+		System.out.println(summary);
 	}
 
 }

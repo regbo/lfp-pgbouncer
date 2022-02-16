@@ -2,9 +2,10 @@ package com.lfp.pgbouncer_app;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 
 import com.lfp.connect.undertow.Undertows;
 import com.lfp.connect.undertow.handler.ErrorLoggingHandler;
@@ -13,6 +14,7 @@ import com.lfp.joe.core.config.MachineConfig;
 import com.lfp.joe.core.process.CentralExecutor;
 import com.lfp.joe.net.http.ip.IPs;
 import com.lfp.joe.net.socket.socks.Sockets;
+import com.lfp.joe.process.PromiseProcess;
 import com.lfp.joe.utils.Utils;
 import com.lfp.pgbouncer_app.authenticator.AuthenticatorHandler;
 import com.lfp.pgbouncer_app.caddy.CaddyService;
@@ -29,6 +31,7 @@ public class App {
 	private static final Class<?> THIS_CLASS = new Object() {
 	}.getClass().getEnclosingClass();
 	private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(THIS_CLASS);
+	private static final Duration PG_BOUNCER_STARTUP_TIMEOUT = Duration.ofSeconds(30);
 
 	public static void main(String[] args) {
 		int exitCode = 0;
@@ -43,10 +46,11 @@ public class App {
 		System.exit(exitCode);
 	}
 
-	public static void run(String[] args) throws IOException {
+	@SuppressWarnings("resource")
+	public static void run(String[] args) throws IOException, InterruptedException {
 		ENVService.init();
-		var localIPAddress = MachineConfig.isDocker() ? "docker.host.internal" : IPs.getLocalIPAddress();
-		InetSocketAddress authenticatorAddress = new InetSocketAddress(localIPAddress, Sockets.allocatePort());
+		InetSocketAddress authenticatorAddress = InetSocketAddress.createUnresolved(IPs.getLocalIPAddress(),
+				Sockets.allocatePort());
 		var serverBuilder = Undertows.serverBuilderBase();
 		{
 			var authHandler = initializeHandler(AuthenticatorHandler.get());
@@ -54,21 +58,25 @@ public class App {
 					authHandler);
 		}
 		CertStoreService certStoreService = CertStoreService.get();
-		InetSocketAddress serviceAddress = new InetSocketAddress(localIPAddress, Sockets.allocatePort());
+		InetSocketAddress serviceAddress = InetSocketAddress.createUnresolved(IPs.getLocalIPAddress(),
+				Sockets.allocatePort());
 		{
-			var serviceHandler = initializeHandler(new PGBouncerServiceImpl(certStoreService));
+			var serviceHandler = initializeHandler(new PGBouncerServiceImpl());
 			serverBuilder.addHttpListener(serviceAddress.getPort(), serviceAddress.getHostString(), serviceHandler);
 		}
 		var server = serverBuilder.build();
 		server.start();
 		logger.info("undertow started:{}",
 				Utils.Lots.stream(server.getListenerInfo()).map(ListenerInfo::getAddress).toList());
-		PGBouncerExecService pgBouncerService;
-		if (MachineConfig.isDeveloper() && Utils.Machine.isWindows())
-			pgBouncerService = null;
-		else {
-			pgBouncerService = new PGBouncerExecService(authenticatorAddress, args);
-			logger.info("pgBouncer started:{}", pgBouncerService.getProcess().getProcess().pid());
+		InetSocketAddress pgBouncerServiceAddress;
+		PromiseProcess pgBouncerServiceProcess;
+		if (MachineConfig.isDeveloper() && Utils.Machine.isWindows()) {
+			pgBouncerServiceProcess = null;
+			pgBouncerServiceAddress = null;
+		} else {
+			var pgBouncerService = new PGBouncerExecService(authenticatorAddress, args);
+			pgBouncerServiceAddress = pgBouncerService.getPgBouncerAddress();
+			pgBouncerServiceProcess = pgBouncerService.start();
 			Runnable clientTLSUpdateTask = () -> {
 				var certStore = certStoreService.streamCertStores().findFirst().orElse(null);
 				Utils.Functions.unchecked(() -> pgBouncerService.setClientTLS(certStore));
@@ -77,20 +85,23 @@ public class App {
 				clientTLSUpdateTask.run();
 			});
 			clientTLSUpdateTask.run();
+			logger.info("pgBouncer started. pid{} address:{}", pgBouncerServiceProcess.getProcess().pid(),
+					pgBouncerServiceAddress);
 		}
-		var caddyService = new CaddyService(serviceAddress, pgBouncerService, RedisService.get());
+		var caddyService = new CaddyService(serviceAddress, pgBouncerServiceAddress, RedisService.get());
 		var caddyProcess = caddyService.get();
 		logger.info("caddy started:{}", caddyProcess.getProcess().pid());
-		List<CompletableFuture<?>> processList = new ArrayList<>();
+		List<CompletionStage<?>> processList = new ArrayList<>();
 		processList.add(caddyProcess.getProcess().onExit());
-		if (pgBouncerService != null)
-			processList.add(pgBouncerService.getProcess().getProcess().onExit());
-		Promises.all(processList).join();
+		if (pgBouncerServiceProcess != null)
+			processList.add(pgBouncerServiceProcess);
+		Promises.any(processList).join();
 	}
 
 	private static HttpHandler initializeHandler(HttpHandler httpHandler) {
 		httpHandler = new ErrorLoggingHandler(httpHandler);
 		httpHandler = new ThreadHttpHandler(httpHandler, CentralExecutor.INSTANCE);
 		return httpHandler;
+
 	}
 }

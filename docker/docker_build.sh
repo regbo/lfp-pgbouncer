@@ -50,7 +50,8 @@ function files_hash_current(){
 }
 
 function files_hash_update(){
-	find $PWD -type f -not -path '*/.*' -print0 | sort -z | xargs -0 sha1sum | sha1sum > $FILES_HASH_STORE
+	FILES_HASH=$(find $PWD -not -path '*/.*' -not -name 'Dokcerfile' -not -path '*/config-private/*' -type f | xargs -d'\n' -P0 -n1 md5sum | sort -k 2 | md5sum)
+	echo $FILES_HASH > $FILES_HASH_STORE
 	files_hash_current
 }
 
@@ -60,11 +61,6 @@ function is_success(){
 }
 
 #ALIAS
-
-if is_success cmd.exe /c "mvn -version"
-then
-	alias mvn="cmd.exe /c \"mvn $@\""
-fi
 
 CUR_DIR="$PWD"
 SCRIPT_DIR="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
@@ -85,18 +81,26 @@ if [[ ! -z "$MAVEN_DIR" ]]; then
 	FILES_SHA1_VALUE=$(files_hash_current)
 	FILES_SHA1_VALUE_UPDATED=$(files_hash_update)
 	if [[ $SKIP_MAVEN_BUILD_ON_NO_CHANGE == 0 ]] || [[ "$FILES_SHA1_VALUE" != "$FILES_SHA1_VALUE_UPDATED" ]]; then
-		mvn package -T 2.0C
-		export APP_JAR=$(find "./$MAVEN_DIR/target" -type f -name \*.jar | xargs ls -1S | head -n 1)
-		echo "maven build complete:$APP_JAR"
+		MVN_ARGUMENTS="clean package \"-Dmaven.javadoc.skip=true\" -T 2.0C"
+		echo "maven build started. MVN_ARGUMENTS:$MVN_ARGUMENTS"
+		if is_success powershell.exe /c "mvn -version"
+		then
+			echo "maven windows executable in use"
+			powershell.exe /c "mvn $MVN_ARGUMENTS"
+		else
+			sh -c "mvn $MVN_ARGUMENTS"
+		fi
 		files_hash_update
 	fi
+	export APP_JAR=$(find "$MAVEN_DIR/target" -type f -name \*.jar | xargs ls -1S | head -n 1)
+	echo "maven build complete. APP_JAR:$APP_JAR"
     cd $SCRIPT_DIR
 fi
 
 TAG="$REPOSITORY_USERNAME/$REPOSITORY_NAME:latest"
 echo "TAG:$TAG"
 
-docker build -t $TAG -f "${SCRIPT_DIR}/Dockerfile" $DOCKER_BUILD_DIR
+docker build --build-arg "APP_JAR=${APP_JAR}" -t $TAG -f "${SCRIPT_DIR}/Dockerfile" $DOCKER_BUILD_DIR
 
 if [[ $PUSH_DOCKER_IMAGE != 0 ]]; then
   docker push $TAG

@@ -55,6 +55,10 @@ public interface PGBouncerAppConfig extends Config {
 
 	String tlsIssuerDnsProvider();
 
+	@DefaultValue("https://zerossl.crt.sectigo.com/ZeroSSLRSADomainSecureSiteCA.crt")
+	@ConverterClass(URIConverter.class)
+	URI tlsRootCAURI();
+
 	List<String> authenticatorJwtIssuerHosts();
 
 	@ConverterClass(URIConverter.class)
@@ -62,6 +66,9 @@ public interface PGBouncerAppConfig extends Config {
 
 	@ConverterClass(MultimapConverter.class)
 	Map<String, List<String>> authenticatorJwtRequiredClaims();
+
+	@DefaultValue("false")
+	boolean logCertificateSummaries();
 
 	public static void main(String[] args) {
 		Configs.printProperties(PrintOptions.propertiesBuilder().withSkipPopulated(true).build());

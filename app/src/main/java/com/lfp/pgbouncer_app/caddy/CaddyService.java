@@ -48,7 +48,6 @@ import com.lfp.pgbouncer.service.config.PGBouncerServiceConfig;
 import com.lfp.pgbouncer_app.ENVService;
 import com.lfp.pgbouncer_app.config.CaddyExecConfig;
 import com.lfp.pgbouncer_app.config.PGBouncerAppConfig;
-import com.lfp.pgbouncer_app.pgbouncer.PGBouncerExecService;
 import com.lfp.pgbouncer_app.storage.RedisService;
 
 import one.util.streamex.StreamEx;
@@ -60,15 +59,16 @@ public class CaddyService implements Supplier<CompletableStartedProcess> {
 	private static final List<String> APPEND_DOT_PROVIDERS = List.of("route53");
 
 	private final InetSocketAddress serviceAddress;
-	private final PGBouncerExecService pgBouncerService;
+	private final InetSocketAddress pgBouncerServiceAddress;
 	private final RedisService redisService;
 	private final MemoizedSupplier<CaddyConfig> caddyConfigSupplier;
 
-	public CaddyService(InetSocketAddress serviceAddress, PGBouncerExecService pgBouncerService,
+	public CaddyService(InetSocketAddress serviceAddress, InetSocketAddress pgBouncerServiceAddress,
 			RedisService redisService) {
 		this.serviceAddress = Objects.requireNonNull(serviceAddress);
-		Requires.isTrue(pgBouncerService != null || MachineConfig.isDeveloper());
-		this.pgBouncerService = pgBouncerService;
+		if (pgBouncerServiceAddress == null && MachineConfig.isDeveloper())
+			pgBouncerServiceAddress = InetSocketAddress.createUnresolved(IPs.getLocalIPAddress(), 6433);
+		this.pgBouncerServiceAddress = Requires.nonNull(pgBouncerServiceAddress);
 		this.redisService = Objects.requireNonNull(redisService);
 		this.caddyConfigSupplier = Utils.Functions.memoize(() -> {
 			var caddyConfig = CaddyConfig.builder().build();
@@ -140,7 +140,8 @@ public class CaddyService implements Supplier<CompletableStartedProcess> {
 		issuerBlder.challenges(Challenges.builder()
 				.dns(Dns.builder().provider(Provider.builder().name(cfg.tlsIssuerDnsProvider()).build()).build())
 				.build());
-		blder.automation(Automation.builder().policies(Policy.builder().issuers(issuerBlder.build()).build()).build());
+		blder.automation(Automation.builder()
+				.policies(Policy.builder().keyType("rsa4096").issuers(issuerBlder.build()).build()).build());
 		return blder.build();
 	}
 
@@ -183,7 +184,7 @@ public class CaddyService implements Supplier<CompletableStartedProcess> {
 		blder.listen(List.of(String.format(":%s", port)));
 		List<RouteLayer4> routes = new ArrayList<>();
 		{
-			var sniMatch = MatchLayer4.builder().tls(MatchTls.builder().sni(uri.getHost()).build()).build();
+			var sniMatch = MatchLayer4.builder().tls(MatchTls.builder().build()).build();
 			var tlsHandle = HandleLayer4.builder().handler("tls")
 					.connectionPolicies(ConnectionPolicy.builder().alpn("http/1.1").build()).build();
 			var proxyHandle = HandleLayer4.builder().handler("proxy")
@@ -194,12 +195,9 @@ public class CaddyService implements Supplier<CompletableStartedProcess> {
 			routes.add(RouteLayer4.builder().match(sniMatch).handle(tlsHandle, proxyHandle).build());
 		}
 		{
-			var pgBouncerAddress = Optional.ofNullable(this.pgBouncerService).map(v -> v.getPgBouncerAddress())
-					.orElse(null);
-			if (MachineConfig.isDeveloper())
-				pgBouncerAddress = InetSocketAddress.createUnresolved(IPs.getLocalIPAddress(), 6433);
-			var proxyHandle = HandleLayer4.builder().handler("proxy").upstreams(UpstreamLayer4.builder()
-					.dial(String.format("%s:%s", pgBouncerAddress.getHostString(), pgBouncerAddress.getPort())).build())
+			var proxyHandle = HandleLayer4.builder().handler("proxy")
+					.upstreams(UpstreamLayer4.builder().dial(String.format("%s:%s",
+							pgBouncerServiceAddress.getHostString(), pgBouncerServiceAddress.getPort())).build())
 					.build();
 			routes.add(RouteLayer4.builder().handle(proxyHandle).build());
 		}

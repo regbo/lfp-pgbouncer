@@ -25,7 +25,7 @@ public class KeyPrefixService {
 	private static final Class<?> THIS_CLASS = new Object() {
 	}.getClass().getEnclosingClass();
 	private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(THIS_CLASS);
-	private static final int VERSION = 2;
+	private static final int VERSION = 3;
 	@SuppressWarnings("serial")
 	private static final TypeToken<StatValue<String>> KEY_PREFIX_VALUE_STORE_TT = new TypeToken<StatValue<String>>() {
 	};

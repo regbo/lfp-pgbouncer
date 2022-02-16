@@ -51,7 +51,23 @@ USER root
 
 COPY --from=pgbouncer-builder /usr/local/bin/pgbouncer /opt/bitnami/pgbouncer/bin/pgbouncer
 COPY --from=pgbouncer-builder /lib/security/mypam.so /lib/security/mypam.so
+
+############UTILS INSTALL############
+
+RUN apt-get update \
+  && apt-get install -y \
+  nano \
+  wget \
+  curl \
+  && rm -rf /var/lib/apt/lists/*
   
+############JAVA INSTALL############
+
+RUN apt-get update \
+  && apt-get install -y \
+  openjdk-11-jre-headless \
+  && rm -rf /var/lib/apt/lists/*
+
 ############GOLANG INSTALL############
 
 ENV GODIR=$WORKDIR/go
@@ -64,18 +80,23 @@ RUN curl -sL https://git.io/vQhTU | bash \
 ENV PATH=$GOROOT/bin:$PATH
 ENV PATH=$GOPATH/bin:$PATH
 
-############JAVA INSTALL############
+############CADDY INSTALL############
 
-RUN apt-get update \
-  && apt-get install -y openjdk-11-jre-headless \
-  && rm -rf /var/lib/apt/lists/*
-  
+RUN go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
+RUN xcaddy build \
+    --with github.com/gamalan/caddy-tlsredis \
+    --with github.com/mholt/caddy-l4 \
+    --with github.com/mholt/caddy-dynamicdns \
+    --with github.com/caddy-dns/route53 \
+  && mv ./caddy /usr/local/bin/caddy
+RUN go install github.com/pete911/certinfo@latest
+
 ############COPY FILES############
-	
-COPY $APP_JAR /app.jar
-COPY docker/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
 
-ENTRYPOINT ["/entrypoint.sh"]
+ARG APP_JAR
+COPY ${APP_JAR} /app.jar
+RUN du -h /app.jar
+
+ENTRYPOINT ["sh", "-c", "java -XX:+UnlockExperimentalVMOptions -XX:MaxRAMPercentage=10 --add-opens java.base/jdk.internal.loader=ALL-UNNAMED --add-opens java.base/jdk.internal.misc=ALL-UNNAMED -Dfile.encoding=UTF-8 -jar /app.jar"]
 
 CMD ["/opt/bitnami/scripts/pgbouncer/run.sh"]
