@@ -15,4 +15,7 @@ public interface CaddyExecConfig extends Config {
 	@DefaultValue("/usr/local/bin/caddy")
 	@ConverterClass(FileConverter.class)
 	File caddyExec();
+	
+	@DefaultValue("/ping")
+	String pingPath();
 }

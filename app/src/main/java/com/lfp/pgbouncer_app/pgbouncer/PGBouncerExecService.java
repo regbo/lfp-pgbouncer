@@ -8,26 +8,30 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
+import java.util.Optional;
 
+import com.lfp.joe.certigo.impl.CertigoServiceImpl;
+import com.lfp.joe.certigo.service.CertificateInfo;
 import com.lfp.joe.core.function.Muto;
 import com.lfp.joe.core.function.Scrapable;
-import com.lfp.joe.core.io.CloseableFile;
+import com.lfp.joe.core.io.FileExt;
 import com.lfp.joe.core.process.Callbacks;
 import com.lfp.joe.core.properties.Configs;
 import com.lfp.joe.net.http.ip.IPs;
 import com.lfp.joe.net.socket.socks.Sockets;
 import com.lfp.joe.process.Procs;
 import com.lfp.joe.process.PromiseProcess;
+import com.lfp.joe.serial.Serials;
 import com.lfp.joe.threads.Threads;
 import com.lfp.joe.utils.Utils;
 import com.lfp.joe.utils.function.Requires;
 import com.lfp.pgbouncer_app.cert.CertStore;
-import com.lfp.pgbouncer_app.cert.CertSummary;
 import com.lfp.pgbouncer_app.config.PGBouncerAppConfig;
 import com.lfp.pgbouncer_app.config.PGBouncerExecConfig;
 
@@ -198,8 +202,7 @@ public class PGBouncerExecService extends Scrapable.Impl {
 	}
 
 	private static Entry<Bytes, Bytes> generateDummyCertEntry() {
-		var directory = CloseableFile
-				.from(Utils.Files.tempFile(THIS_CLASS, "dummy-certs", Utils.Crypto.getSecureRandomString()));
+		var directory = Utils.Files.tempFile(THIS_CLASS, "dummy-certs", Utils.Crypto.getSecureRandomString()).deleteAllOnScrap(true);
 		directory.mkdirs();
 		try (directory) {
 			var days = 365 * 25;
@@ -209,7 +212,10 @@ public class PGBouncerExecService extends Scrapable.Impl {
 			var commandTemplate = "openssl req -x509 -newkey rsa:4096 -sha256 -days {{{DAYS}}} -nodes -keyout {{{KEY_FILE}}} -out {{{CERT_FILE}}} -subj \"/CN={{{DNS}}}\" -addext \"subjectAltName=DNS:{{{DNS}}}\"";
 			var command = Utils.Strings.templateApply(commandTemplate, "DAYS", days, "DNS", dns, "KEY_FILE",
 					keyFile.getName(), "CERT_FILE", certFile.getName());
-			Procs.execute(command, directory);
+			Procs.execute(command, ppe -> {
+				ppe.directory(directory);
+				ppe.disableOutputLog();
+			});
 			var keyValue = Utils.Bits.from(keyFile);
 			var certValue = Utils.Bits.from(certFile);
 			return Map.entry(keyValue, certValue);
@@ -219,21 +225,33 @@ public class PGBouncerExecService extends Scrapable.Impl {
 	}
 
 	private static void logCertificateSummary(Bytes keyValue, Bytes certValue) {
-		if (!Configs.get(PGBouncerAppConfig.class).logCertificateSummaries())
-			return;
-		logCertificateSummary(keyValue, "KEY");
-		logCertificateSummary(certValue, "CERT");
+		logCertificateSummary(keyValue, certValue, false);
 	}
 
-	private static void logCertificateSummary(Bytes certValue, String name) {
-		var summary = CertSummary.get(certValue);
-		logger.info("{} Updated --------------------------\n{}", name, summary);
+	private static void logCertificateSummary(Bytes keyValue, Bytes certValue, boolean force) {
+		if (!force && !Configs.get(PGBouncerAppConfig.class).logCertificateSummaries())
+			return;
+		logger.info("Key Updated:{}", getSummary(keyValue));
+		logger.info("Cert Updated:{}", getSummary(certValue));
+	}
+
+	private static String getSummary(Bytes certValue) {
+		CertificateInfo certificateInfo;
+		try {
+			certificateInfo = CertigoServiceImpl.get().dump(certValue);
+		} catch (IOException e) {
+			throw RuntimeException.class.isInstance(e) ? RuntimeException.class.cast(e) : new RuntimeException(e);
+		}
+		var size = Optional.ofNullable(certificateInfo).map(CertificateInfo::getCertificates).map(Collection::size)
+				.orElse(0);
+		if (size > 0)
+			return Serials.Gsons.get().toJson(certificateInfo);
+		return Utils.Crypto.hashMD5(certValue).encodeHex();
 	}
 
 	public static void main(String[] args) {
-		var dummyCert = generateDummyCertEntry().getValue();
-		var summary = CertSummary.get(dummyCert);
-		System.out.println(summary);
+		var dummyCertEntry = generateDummyCertEntry();
+		logCertificateSummary(dummyCertEntry.getKey(), dummyCertEntry.getValue(), true);
 	}
 
 }

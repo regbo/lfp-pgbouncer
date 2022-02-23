@@ -140,8 +140,7 @@ public class CaddyService implements Supplier<CompletableStartedProcess> {
 		issuerBlder.challenges(Challenges.builder()
 				.dns(Dns.builder().provider(Provider.builder().name(cfg.tlsIssuerDnsProvider()).build()).build())
 				.build());
-		blder.automation(Automation.builder()
-				.policies(Policy.builder().keyType("rsa4096").issuers(issuerBlder.build()).build()).build());
+		blder.automation(Automation.builder().policies(Policy.builder().issuers(issuerBlder.build()).build()).build());
 		return blder.build();
 	}
 

@@ -16,7 +16,7 @@ import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.google.common.net.MediaType;
 import com.lfp.connect.undertow.UndertowUtils;
 import com.lfp.connect.undertow.retrofit.RetrofitHandler;
-import com.lfp.joe.certigo.impl.CertigoService;
+import com.lfp.joe.certigo.impl.CertigoServiceImpl;
 import com.lfp.joe.certigo.service.CertificateInfo;
 import com.lfp.joe.core.config.MachineConfig;
 import com.lfp.joe.core.function.Nada;
@@ -30,7 +30,9 @@ import com.lfp.joe.utils.Utils;
 import com.lfp.pgbouncer.service.PGBouncerService;
 import com.lfp.pgbouncer.service.config.PGBouncerServiceConfig;
 import com.lfp.pgbouncer_app.ENVService;
+import com.lfp.pgbouncer_app.caddy.PingHandler;
 
+import io.undertow.server.HttpServerExchange;
 import io.undertow.util.Headers;
 import io.undertow.util.StatusCodes;
 
@@ -45,42 +47,29 @@ public class PGBouncerServiceImpl extends RetrofitHandler<PGBouncerService>
 	private static final String CERTIFICATE_CHAIN_PEM_PATH = Utils.Strings.stripEnd(CERTIFICATE_CHAIN_PATH, "/")
 			+ PEM_FILE_EXTENSION;
 	private static final Duration CERTIFICATE_CHAIN_CACHE_REFRESH_DURATION = Duration.ofSeconds(1);
-	private static final boolean CERTIFICATE_CHAIN_CACHE_HASH_SORT_PEMS = true;
+
 	private final Scrapable _delegateScrapable = Scrapable.create();
-	private final LoadingCache<Nada, CertificateInfo> certificateInfoCache = Caffeine.newBuilder().maximumSize(1)
-			.executor(CentralExecutor.INSTANCE).refreshAfterWrite(CERTIFICATE_CHAIN_CACHE_REFRESH_DURATION)
-			.build(new CacheLoader<Nada, CertificateInfo>() {
-
-				@Override
-				public @Nullable CertificateInfo load(@NonNull Nada key) throws Exception {
-					var certificateInfos = loadCertificateChains();
-					return certificateInfos;
-				}
-
-			});
+	private final LoadingCache<Nada, CertificateInfo> certificateInfoCache;
 
 	public PGBouncerServiceImpl() {
 		super(PGBouncerService.class);
-		var pemFilename = ServiceConfig.discover(this).map(ServiceConfig::uri).map(URIs::toAddress).nonNull()
-				.map(v -> String.format("%s_%s", v.getHostString(), v.getPort())).findFirst().orElse("certificate")
-				+ PEM_FILE_EXTENSION;
-		this.addExactPath(CERTIFICATE_CHAIN_PEM_PATH, exchange -> {
-			exchange.setStatusCode(StatusCodes.OK);
-			String contentDispositionType;
-			if (UndertowUtils.isHtmlAccepted(exchange)) {
-				exchange.getResponseHeaders().add(Headers.CONTENT_TYPE, MediaType.PLAIN_TEXT_UTF_8.toString());
-				contentDispositionType = "inline";
-			} else {
-				exchange.getResponseHeaders().add(Headers.CONTENT_TYPE, PEM_FILE_CONTENT_TYPE);
-				contentDispositionType = "attachment";
-			}
-			exchange.getResponseHeaders().add(Headers.CONTENT_DISPOSITION,
-					String.format("%s; filename=\"%s\"", contentDispositionType, pemFilename));
-			exchange.startBlocking();
-			var body = certificateInfo().getBundlePems().stream().findFirst().orElse("");
-			exchange.getResponseSender().send(body);
-			return;
-		});
+		var pingHandler = new PingHandler();
+		pingHandler.accept(this);
+		this.certificateInfoCache = Caffeine.newBuilder().maximumSize(1).executor(CentralExecutor.INSTANCE)
+				.refreshAfterWrite(CERTIFICATE_CHAIN_CACHE_REFRESH_DURATION)
+				.build(new CacheLoader<Nada, CertificateInfo>() {
+
+					@Override
+					public @Nullable CertificateInfo load(@NonNull Nada key) throws Exception {
+						if (!pingHandler.isReady())
+							return null;
+						var certificateInfos = loadCertificateChains();
+						return certificateInfos;
+					}
+
+				});
+
+		this.addExactPath(CERTIFICATE_CHAIN_PEM_PATH, this::handleCertificateChainPem);
 		Runnable pollTask = () -> {
 			try {
 				certificateInfoCache.get(Nada.get());
@@ -97,7 +86,10 @@ public class PGBouncerServiceImpl extends RetrofitHandler<PGBouncerService>
 
 	@Override
 	public CertificateInfo certificateInfo() {
-		return certificateInfoCache.get(Nada.get());
+		var certificateInfo = certificateInfoCache.get(Nada.get());
+		if (certificateInfo != null)
+			return certificateInfo;
+		return new CertificateInfo();
 	}
 
 	@Override
@@ -105,8 +97,30 @@ public class PGBouncerServiceImpl extends RetrofitHandler<PGBouncerService>
 		return _delegateScrapable;
 	}
 
+	protected void handleCertificateChainPem(HttpServerExchange exchange) {
+		var pemFilename = ServiceConfig.discover(this).map(ServiceConfig::uri).map(URIs::toAddress).nonNull()
+				.map(v -> String.format("%s_%s", v.getHostString(), v.getPort())).findFirst().orElse("certificate")
+				+ PEM_FILE_EXTENSION;
+		exchange.setStatusCode(StatusCodes.OK);
+		String contentDispositionType;
+		if (UndertowUtils.isHtmlAccepted(exchange)) {
+			exchange.getResponseHeaders().add(Headers.CONTENT_TYPE, MediaType.PLAIN_TEXT_UTF_8.toString());
+			contentDispositionType = "inline";
+		} else {
+			exchange.getResponseHeaders().add(Headers.CONTENT_TYPE, PEM_FILE_CONTENT_TYPE);
+			contentDispositionType = "attachment";
+		}
+		exchange.getResponseHeaders().add(Headers.CONTENT_DISPOSITION,
+				String.format("%s; filename=\"%s\"", contentDispositionType, pemFilename));
+		exchange.startBlocking();
+		var body = certificateInfo().getBundlePems().stream().findFirst().orElse("");
+		exchange.getResponseSender().send(body);
+		return;
+
+	}
+
 	protected CertificateInfo loadCertificateChains() throws IOException {
-		return CertigoService.get().apply(getCertificateAddress());
+		return CertigoServiceImpl.get().connect(getCertificateAddress());
 	}
 
 	private static InetSocketAddress getCertificateAddress() {

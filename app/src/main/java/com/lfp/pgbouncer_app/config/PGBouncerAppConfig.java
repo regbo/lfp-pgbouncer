@@ -69,6 +69,8 @@ public interface PGBouncerAppConfig extends Config {
 
 	@DefaultValue("false")
 	boolean logCertificateSummaries();
+	
+	
 
 	public static void main(String[] args) {
 		Configs.printProperties(PrintOptions.propertiesBuilder().withSkipPopulated(true).build());

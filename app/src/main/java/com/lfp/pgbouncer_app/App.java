@@ -2,7 +2,6 @@ package com.lfp.pgbouncer_app;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletionStage;
@@ -31,7 +30,6 @@ public class App {
 	private static final Class<?> THIS_CLASS = new Object() {
 	}.getClass().getEnclosingClass();
 	private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(THIS_CLASS);
-	private static final Duration PG_BOUNCER_STARTUP_TIMEOUT = Duration.ofSeconds(30);
 
 	public static void main(String[] args) {
 		int exitCode = 0;
@@ -61,7 +59,8 @@ public class App {
 		InetSocketAddress serviceAddress = InetSocketAddress.createUnresolved(IPs.getLocalIPAddress(),
 				Sockets.allocatePort());
 		{
-			var serviceHandler = initializeHandler(new PGBouncerServiceImpl());
+			var service = new PGBouncerServiceImpl();
+			var serviceHandler = initializeHandler(service);
 			serverBuilder.addHttpListener(serviceAddress.getPort(), serviceAddress.getHostString(), serviceHandler);
 		}
 		var server = serverBuilder.build();
