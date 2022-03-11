@@ -13,21 +13,21 @@
   </modules>
   <distributionManagement>
     <repository>
-      <id>central</id>
-      <url>https://lib.iplasso.com/artifactory/libs-release-local</url>
+      <id>nexus.iplasso.com-releases</id>
+      <url>https://nexus.iplasso.com/repository/maven-releases/</url>
     </repository>
     <snapshotRepository>
-      <id>snapshots</id>
-      <url>https://lib.iplasso.com/artifactory/libs-snapshot</url>
+      <id>nexus.iplasso.com-snapshots</id>
+      <url>https://nexus.iplasso.com/repository/maven-snapshots/</url>
     </snapshotRepository>
   </distributionManagement>
   <properties>
     <maven.compiler.target>11</maven.compiler.target>
-    <com.lfp.joe.version>16.0.6-RELEASE</com.lfp.joe.version>
+    <com.lfp.joe.version>16.1.6-RELEASE</com.lfp.joe.version>
     <maven.build.timestamp.format>yyyy-MM-dd-HH-mm-ss</maven.build.timestamp.format>
     <maven.compiler.source>11</maven.compiler.source>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <revision>0.3.4-RELEASE</revision>
+    <revision>0.4.8-RELEASE</revision>
   </properties>
   <repositories>
     <repository>
