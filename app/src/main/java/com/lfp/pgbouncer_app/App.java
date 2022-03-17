@@ -13,7 +13,7 @@ import com.lfp.joe.core.config.MachineConfig;
 import com.lfp.joe.core.process.executor.CentralExecutor;
 import com.lfp.joe.net.http.ip.IPs;
 import com.lfp.joe.net.socket.socks.Sockets;
-import com.lfp.joe.process.PromiseProcess;
+import com.lfp.joe.process.CSFutureProcess;
 import com.lfp.joe.utils.Utils;
 import com.lfp.pgbouncer_app.authenticator.AuthenticatorHandler;
 import com.lfp.pgbouncer_app.caddy.CaddyService;
@@ -68,7 +68,7 @@ public class App {
 		logger.info("undertow started:{}",
 				Utils.Lots.stream(server.getListenerInfo()).map(ListenerInfo::getAddress).toList());
 		InetSocketAddress pgBouncerServiceAddress;
-		PromiseProcess pgBouncerServiceProcess;
+		CSFutureProcess pgBouncerServiceProcess;
 		if (MachineConfig.isDeveloper() && Utils.Machine.isWindows()) {
 			pgBouncerServiceProcess = null;
 			pgBouncerServiceAddress = null;

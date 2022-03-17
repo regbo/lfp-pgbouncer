@@ -21,12 +21,12 @@ import com.lfp.joe.certigo.service.CertificateInfo;
 import com.lfp.joe.core.function.Muto;
 import com.lfp.joe.core.function.Scrapable;
 import com.lfp.joe.core.io.FileExt;
-import com.lfp.joe.core.process.Callbacks;
+import com.lfp.joe.core.process.future.Callbacks;
 import com.lfp.joe.core.properties.Configs;
 import com.lfp.joe.net.http.ip.IPs;
 import com.lfp.joe.net.socket.socks.Sockets;
 import com.lfp.joe.process.Procs;
-import com.lfp.joe.process.PromiseProcess;
+import com.lfp.joe.process.CSFutureProcess;
 import com.lfp.joe.serial.Serials;
 import com.lfp.joe.threads.Threads;
 import com.lfp.joe.utils.Utils;
@@ -51,7 +51,7 @@ public class PGBouncerExecService extends Scrapable.Impl {
 	private static final String ENV_READ_FILE_POSTFIX = "_FILE";
 	private static final String PGBOUNCER_CLIENT_TLS_SSLMODE = "require";
 	private static final Entry<Bytes, Bytes> DUMMY_CERT_ENTRY = generateDummyCertEntry();
-	private final Muto<PromiseProcess> processMuto = Muto.create();
+	private final Muto<CSFutureProcess> processMuto = Muto.create();
 	private final String[] args;
 	private final InetSocketAddress pgBouncerAddress;
 
@@ -128,7 +128,7 @@ public class PGBouncerExecService extends Scrapable.Impl {
 		return mod;
 	}
 
-	public PromiseProcess start() {
+	public CSFutureProcess start() {
 		return processMuto.updateLockedGet(v -> v == null, nil -> {
 			try {
 				return createProcess();
@@ -142,7 +142,7 @@ public class PGBouncerExecService extends Scrapable.Impl {
 		return pgBouncerAddress;
 	}
 
-	protected PromiseProcess createProcess() throws IOException {
+	protected CSFutureProcess createProcess() throws IOException {
 		var cfg = Configs.get(PGBouncerExecConfig.class);
 		setClientTLS(null);
 		// start process
