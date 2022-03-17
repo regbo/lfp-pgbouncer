@@ -21,7 +21,7 @@ import com.lfp.joe.certigo.service.CertificateInfo;
 import com.lfp.joe.core.config.MachineConfig;
 import com.lfp.joe.core.function.Nada;
 import com.lfp.joe.core.function.Scrapable;
-import com.lfp.joe.core.process.CentralExecutor;
+import com.lfp.joe.core.process.executor.CentralExecutor;
 import com.lfp.joe.core.properties.Configs;
 import com.lfp.joe.net.http.ServiceConfig;
 import com.lfp.joe.net.http.uri.URIs;
