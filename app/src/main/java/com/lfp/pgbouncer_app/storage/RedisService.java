@@ -8,7 +8,7 @@ import com.google.common.base.Optional;
 import com.lfp.data.redis.RedisConfig;
 import com.lfp.data.redisson.client.RedissonClientLFP;
 import com.lfp.data.redisson.client.RedissonClients;
-import com.lfp.joe.core.cache.Instances;
+import com.lfp.joe.core.classpath.Instances;
 import com.lfp.joe.core.function.Scrapable;
 import com.lfp.joe.core.properties.Configs;
 import com.lfp.joe.net.http.uri.URIs;

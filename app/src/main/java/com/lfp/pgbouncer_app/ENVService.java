@@ -6,7 +6,7 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.Objects;
 
-import com.lfp.joe.core.cache.Instances;
+import com.lfp.joe.core.classpath.Instances;
 import com.lfp.joe.core.config.MachineConfig;
 import com.lfp.joe.utils.Utils;
 

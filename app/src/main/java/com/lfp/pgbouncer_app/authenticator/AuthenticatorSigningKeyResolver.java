@@ -3,7 +3,7 @@ package com.lfp.pgbouncer_app.authenticator;
 import java.util.Objects;
 import java.util.function.Predicate;
 
-import com.lfp.joe.core.cache.Instances;
+import com.lfp.joe.core.classpath.Instances;
 import com.lfp.joe.core.properties.Configs;
 import com.lfp.joe.jwt.resolver.ClaimsPredicates;
 import com.lfp.joe.jwt.resolver.IssuerClaimSigningKeyResolver;

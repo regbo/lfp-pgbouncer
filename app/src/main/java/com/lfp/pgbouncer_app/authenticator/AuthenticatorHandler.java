@@ -5,7 +5,7 @@ import java.util.Objects;
 
 import com.lfp.connect.undertow.UndertowUtils;
 import com.lfp.connect.undertow.handler.MessageHandler;
-import com.lfp.joe.core.cache.Instances;
+import com.lfp.joe.core.classpath.Instances;
 import com.lfp.joe.core.config.MachineConfig;
 import com.lfp.joe.jwt.Jwts;
 import com.lfp.joe.jwt.token.JwsLFP;

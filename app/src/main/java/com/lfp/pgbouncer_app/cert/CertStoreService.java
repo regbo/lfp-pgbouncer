@@ -20,7 +20,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.google.common.eventbus.EventBus;
 import com.google.common.eventbus.Subscribe;
 import com.lfp.joe.beans.JodaBeans;
-import com.lfp.joe.core.cache.Instances;
+import com.lfp.joe.core.classpath.Instances;
 import com.lfp.joe.core.function.Nada;
 import com.lfp.joe.core.function.Scrapable;
 import com.lfp.joe.threads.Threads;

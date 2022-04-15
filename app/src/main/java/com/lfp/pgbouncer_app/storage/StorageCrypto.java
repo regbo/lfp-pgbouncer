@@ -9,7 +9,7 @@ import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
-import com.lfp.joe.core.cache.Instances;
+import com.lfp.joe.core.classpath.Instances;
 import com.lfp.joe.core.function.Asserts;
 import com.lfp.joe.core.properties.Configs;
 import com.lfp.joe.utils.Utils;
