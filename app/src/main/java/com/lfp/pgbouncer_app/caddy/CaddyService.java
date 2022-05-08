@@ -1,5 +1,6 @@
 package com.lfp.pgbouncer_app.caddy;
 
+import com.lfp.joe.process.ProcessLFP;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
@@ -43,7 +44,7 @@ import com.lfp.joe.net.http.uri.URIs;
 import com.lfp.joe.serial.Serials;
 import com.lfp.joe.utils.Utils;
 import com.lfp.joe.utils.function.Requires;
-import com.lfp.joe.utils.process.CompletableStartedProcess;
+
 import com.lfp.pgbouncer.service.config.PGBouncerServiceConfig;
 import com.lfp.pgbouncer_app.ENVService;
 import com.lfp.pgbouncer_app.config.CaddyExecConfig;
@@ -52,7 +53,7 @@ import com.lfp.pgbouncer_app.storage.RedisService;
 
 import one.util.streamex.StreamEx;
 
-public class CaddyService implements Supplier<CompletableStartedProcess> {
+public class CaddyService implements Supplier<ProcessLFP> {
 	private static final Class<?> THIS_CLASS = new Object() {
 	}.getClass().getEnclosingClass();
 	private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(THIS_CLASS);
@@ -205,7 +206,7 @@ public class CaddyService implements Supplier<CompletableStartedProcess> {
 	}
 
 	@Override
-	public CompletableStartedProcess get() {
+	public ProcessLFP get() {
 		var caddyExec = Configs.get(CaddyExecConfig.class).caddyExec();
 		if (!caddyExec.exists() && MachineConfig.isDeveloper()) {
 			List<String> modules = new ArrayList<>();

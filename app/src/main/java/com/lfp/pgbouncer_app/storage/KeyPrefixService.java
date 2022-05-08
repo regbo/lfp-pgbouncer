@@ -47,7 +47,7 @@ public class KeyPrefixService {
 				if (_value == null) {
 					var value = Configs.get(PGBouncerAppConfig.class).storageKeyPrefix();
 					if (Utils.Strings.isBlank(value))
-						value = Threads.Futures.getUnchecked(getOrCreateValue()).getValue();
+						value = Threads.Futures.join(getOrCreateValue()).getValue();
 					_value = value;
 				}
 			}

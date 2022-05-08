@@ -4,7 +4,8 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CompletionStage;
+
+import org.threadly.concurrent.future.FutureUtils;
 
 import com.lfp.connect.undertow.Undertows;
 import com.lfp.connect.undertow.handler.ErrorLoggingHandler;
@@ -13,7 +14,8 @@ import com.lfp.joe.core.config.MachineConfig;
 import com.lfp.joe.core.process.executor.CentralExecutor;
 import com.lfp.joe.net.http.ip.IPs;
 import com.lfp.joe.net.socket.socks.Sockets;
-import com.lfp.joe.process.CSFutureProcess;
+import com.lfp.joe.process.ProcessLFP;
+import com.lfp.joe.threads.Threads;
 import com.lfp.joe.utils.Utils;
 import com.lfp.pgbouncer_app.authenticator.AuthenticatorHandler;
 import com.lfp.pgbouncer_app.caddy.CaddyService;
@@ -24,11 +26,9 @@ import com.lfp.pgbouncer_app.storage.RedisService;
 
 import io.undertow.Undertow.ListenerInfo;
 import io.undertow.server.HttpHandler;
-import net.tascalate.concurrent.Promises;
 
 public class App {
-	private static final Class<?> THIS_CLASS = new Object() {
-	}.getClass().getEnclosingClass();
+	private static final Class<?> THIS_CLASS = new Object() {}.getClass().getEnclosingClass();
 	private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(THIS_CLASS);
 
 	public static void main(String[] args) {
@@ -68,7 +68,7 @@ public class App {
 		logger.info("undertow started:{}",
 				Utils.Lots.stream(server.getListenerInfo()).map(ListenerInfo::getAddress).toList());
 		InetSocketAddress pgBouncerServiceAddress;
-		CSFutureProcess pgBouncerServiceProcess;
+		ProcessLFP pgBouncerServiceProcess;
 		if (MachineConfig.isDeveloper() && Utils.Machine.isWindows()) {
 			pgBouncerServiceProcess = null;
 			pgBouncerServiceAddress = null;
@@ -90,11 +90,11 @@ public class App {
 		var caddyService = new CaddyService(serviceAddress, pgBouncerServiceAddress, RedisService.get());
 		var caddyProcess = caddyService.get();
 		logger.info("caddy started:{}", caddyProcess.getProcess().pid());
-		List<CompletionStage<?>> processList = new ArrayList<>();
-		processList.add(caddyProcess.getProcess().onExit());
+		List<ProcessLFP> processList = new ArrayList<>();
+		processList.add(caddyProcess);
 		if (pgBouncerServiceProcess != null)
 			processList.add(pgBouncerServiceProcess);
-		Promises.any(processList).join();
+		Threads.Futures.join(FutureUtils.makeFirstResultFuture(processList, false));
 	}
 
 	private static HttpHandler initializeHandler(HttpHandler httpHandler) {

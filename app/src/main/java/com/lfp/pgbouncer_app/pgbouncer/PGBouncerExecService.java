@@ -20,13 +20,11 @@ import com.lfp.joe.certigo.impl.CertigoServiceImpl;
 import com.lfp.joe.certigo.service.CertificateInfo;
 import com.lfp.joe.core.function.Muto;
 import com.lfp.joe.core.function.Scrapable;
-import com.lfp.joe.core.io.FileExt;
-import com.lfp.joe.core.process.future.Callbacks;
 import com.lfp.joe.core.properties.Configs;
 import com.lfp.joe.net.http.ip.IPs;
 import com.lfp.joe.net.socket.socks.Sockets;
+import com.lfp.joe.process.ProcessLFP;
 import com.lfp.joe.process.Procs;
-import com.lfp.joe.process.CSFutureProcess;
 import com.lfp.joe.serial.Serials;
 import com.lfp.joe.threads.Threads;
 import com.lfp.joe.utils.Utils;
@@ -40,8 +38,7 @@ import one.util.streamex.StreamEx;
 
 public class PGBouncerExecService extends Scrapable.Impl {
 
-	private static final Class<?> THIS_CLASS = new Object() {
-	}.getClass().getEnclosingClass();
+	private static final Class<?> THIS_CLASS = new Object() {}.getClass().getEnclosingClass();
 	private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(THIS_CLASS);
 
 	private static final String PAM_MODULE_PATH = "/lib/security/mypam.so";
@@ -51,7 +48,7 @@ public class PGBouncerExecService extends Scrapable.Impl {
 	private static final String ENV_READ_FILE_POSTFIX = "_FILE";
 	private static final String PGBOUNCER_CLIENT_TLS_SSLMODE = "require";
 	private static final Entry<Bytes, Bytes> DUMMY_CERT_ENTRY = generateDummyCertEntry();
-	private final Muto<CSFutureProcess> processMuto = Muto.create();
+	private final Muto<ProcessLFP> processMuto = Muto.create();
 	private final String[] args;
 	private final InetSocketAddress pgBouncerAddress;
 
@@ -77,7 +74,7 @@ public class PGBouncerExecService extends Scrapable.Impl {
 	}
 
 	public void reload() throws IOException {
-		processMuto.acceptLocked(process -> {
+		processMuto.acceptSynchronized(process -> {
 			if (process == null)
 				return;
 			logger.info("reload started");
@@ -128,21 +125,21 @@ public class PGBouncerExecService extends Scrapable.Impl {
 		return mod;
 	}
 
-	public CSFutureProcess start() {
-		return processMuto.updateLockedGet(v -> v == null, nil -> {
+	public ProcessLFP start() {
+		return processMuto.updateAndGetSynchronized(nil -> {
 			try {
 				return createProcess();
 			} catch (IOException e) {
 				throw RuntimeException.class.isInstance(e) ? RuntimeException.class.cast(e) : new RuntimeException(e);
 			}
-		});
+		}, v -> v == null);
 	}
 
 	public InetSocketAddress getPgBouncerAddress() {
 		return pgBouncerAddress;
 	}
 
-	protected CSFutureProcess createProcess() throws IOException {
+	protected ProcessLFP createProcess() throws IOException {
 		var cfg = Configs.get(PGBouncerExecConfig.class);
 		setClientTLS(null);
 		// start process
@@ -159,7 +156,7 @@ public class PGBouncerExecService extends Scrapable.Impl {
 		command = StreamEx.of(command).append(argsStream).joining(" ");
 		var process = Procs.start(command, null, environmentVariables);
 		this.onScrap(() -> process.cancel(true));
-		process.whenComplete(Callbacks.listener(this::scrap));
+		process.listener(this::scrap);
 		logger.info("pgbouncer started:{}", this.pgBouncerAddress);
 		var startupTimeout = cfg.startupTimeout();
 		if (startupTimeout != null) {
@@ -202,7 +199,8 @@ public class PGBouncerExecService extends Scrapable.Impl {
 	}
 
 	private static Entry<Bytes, Bytes> generateDummyCertEntry() {
-		var directory = Utils.Files.tempFile(THIS_CLASS, "dummy-certs", Utils.Crypto.getSecureRandomString()).deleteAllOnScrap(true);
+		var directory = Utils.Files.tempFile(THIS_CLASS, "dummy-certs", Utils.Crypto.getSecureRandomString())
+				.deleteAllOnScrap(true);
 		directory.mkdirs();
 		try (directory) {
 			var days = 365 * 25;
