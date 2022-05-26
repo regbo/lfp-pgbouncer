@@ -10,8 +10,8 @@ import org.threadly.concurrent.future.ListenableFuture;
 import com.google.common.reflect.TypeToken;
 import com.lfp.data.redisson.client.RedissonUtils;
 import com.lfp.data.redisson.client.codec.GsonCodec;
+import com.lfp.data.redisson.tools.accessor.ImmutableKeepAliveSemaphore.AcquireAsyncKeepAliveRequest;
 import com.lfp.data.redisson.tools.accessor.KeepAliveSemaphore;
-import com.lfp.data.redisson.tools.accessor.KeepAliveSemaphore.ReleaseCallback;
 import com.lfp.joe.cache.StatValue;
 import com.lfp.joe.core.properties.Configs;
 import com.lfp.joe.threads.Threads;
@@ -22,13 +22,11 @@ import com.lfp.pgbouncer_app.config.PGBouncerAppConfig;
 
 public class KeyPrefixService {
 
-	private static final Class<?> THIS_CLASS = new Object() {
-	}.getClass().getEnclosingClass();
+	private static final Class<?> THIS_CLASS = new Object() {}.getClass().getEnclosingClass();
 	private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(THIS_CLASS);
 	private static final int VERSION = 3;
 	@SuppressWarnings("serial")
-	private static final TypeToken<StatValue<String>> KEY_PREFIX_VALUE_STORE_TT = new TypeToken<StatValue<String>>() {
-	};
+	private static final TypeToken<StatValue<String>> KEY_PREFIX_VALUE_STORE_TT = new TypeToken<StatValue<String>>() {};
 	private static final Codec KEY_PREFIX_VALUE_STORE_CODEC = new GsonCodec(TypeToken.of(String.class),
 			KEY_PREFIX_VALUE_STORE_TT);
 	private static final Duration LOCK_LEASE_DURATION = Duration.ofSeconds(10);
@@ -59,21 +57,20 @@ public class KeyPrefixService {
 	}
 
 	private ListenableFuture<StatValue<String>> getOrCreateValue() {
-		return getOrCreateValue(null);
+		return getOrCreateValue(false);
 	}
 
-	private ListenableFuture<StatValue<String>> getOrCreateValue(ReleaseCallback releaseCallback) {
+	private ListenableFuture<StatValue<String>> getOrCreateValue(boolean locked) {
 		var currentValueFuture = getCurrentValue();
 		return currentValueFuture.flatMap(statValue -> {
 			if (statValue != null)
 				return FutureUtils.immediateResultFuture(statValue);
-			if (releaseCallback == null) {
+			if (!locked) {
 				var semaphore = new KeepAliveSemaphore(this.redisClient, 1, getStorageKey(), "lock");
-				var acquireFuture = semaphore.acquireAsyncKeepAlive(LOCK_LEASE_DURATION);
-				return acquireFuture.flatMap(cb -> {
-					var future = getOrCreateValue(cb);
-					return future.listener(() -> cb.release());
-				});
+				var acquireFuture = semaphore.acquireAsyncKeepAlive(
+						AcquireAsyncKeepAliveRequest.<StatValue<String>>builder().leaseTimeToLive(LOCK_LEASE_DURATION)
+								.onAcquiredFlatMap(() -> getOrCreateValue(true)).build());
+				return acquireFuture;
 			}
 			var newStatValue = StatValue.build(KeyGenerator.apply(this.host, Utils.Crypto.getSecureRandomString()));
 			var rfuture = this.redisClient.getBucket(this.getStorageKey(), KEY_PREFIX_VALUE_STORE_CODEC)

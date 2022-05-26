@@ -21,7 +21,7 @@ import com.lfp.joe.certigo.service.CertificateInfo;
 import com.lfp.joe.core.config.MachineConfig;
 import com.lfp.joe.core.function.Nada;
 import com.lfp.joe.core.function.Scrapable;
-import com.lfp.joe.core.process.executor.CentralExecutor;
+import com.lfp.joe.core.process.executor.CoreTasks;
 import com.lfp.joe.core.properties.Configs;
 import com.lfp.joe.net.http.ServiceConfig;
 import com.lfp.joe.net.http.uri.URIs;
@@ -55,7 +55,7 @@ public class PGBouncerServiceImpl extends RetrofitHandler<PGBouncerService>
 		super(PGBouncerService.class);
 		var pingHandler = new PingHandler();
 		pingHandler.accept(this);
-		this.certificateInfoCache = Caffeine.newBuilder().maximumSize(1).executor(CentralExecutor.INSTANCE)
+		this.certificateInfoCache = Caffeine.newBuilder().maximumSize(1).executor(CoreTasks.executor())
 				.refreshAfterWrite(CERTIFICATE_CHAIN_CACHE_REFRESH_DURATION)
 				.build(new CacheLoader<Nada, CertificateInfo>() {
 

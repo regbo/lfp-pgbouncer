@@ -11,7 +11,7 @@ import com.lfp.connect.undertow.Undertows;
 import com.lfp.connect.undertow.handler.ErrorLoggingHandler;
 import com.lfp.connect.undertow.handler.ThreadHttpHandler;
 import com.lfp.joe.core.config.MachineConfig;
-import com.lfp.joe.core.process.executor.CentralExecutor;
+import com.lfp.joe.core.process.executor.CoreTasks;
 import com.lfp.joe.net.http.ip.IPs;
 import com.lfp.joe.net.socket.socks.Sockets;
 import com.lfp.joe.process.ProcessLFP;
@@ -99,7 +99,7 @@ public class App {
 
 	private static HttpHandler initializeHandler(HttpHandler httpHandler) {
 		httpHandler = new ErrorLoggingHandler(httpHandler);
-		httpHandler = new ThreadHttpHandler(httpHandler, CentralExecutor.INSTANCE);
+		httpHandler = new ThreadHttpHandler(httpHandler, CoreTasks.executor());
 		return httpHandler;
 
 	}
