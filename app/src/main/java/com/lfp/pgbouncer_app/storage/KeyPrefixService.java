@@ -1,7 +1,5 @@
 package com.lfp.pgbouncer_app.storage;
 
-import java.time.Duration;
-
 import org.redisson.api.RedissonClient;
 import org.redisson.client.codec.Codec;
 import org.threadly.concurrent.future.FutureUtils;
@@ -10,7 +8,6 @@ import org.threadly.concurrent.future.ListenableFuture;
 import com.google.common.reflect.TypeToken;
 import com.lfp.data.redisson.client.RedissonUtils;
 import com.lfp.data.redisson.client.codec.GsonCodec;
-import com.lfp.data.redisson.tools.accessor.ImmutableKeepAliveSemaphore.AcquireAsyncKeepAliveRequest;
 import com.lfp.data.redisson.tools.accessor.KeepAliveSemaphore;
 import com.lfp.joe.cache.StatValue;
 import com.lfp.joe.core.properties.Configs;
@@ -29,7 +26,6 @@ public class KeyPrefixService {
 	private static final TypeToken<StatValue<String>> KEY_PREFIX_VALUE_STORE_TT = new TypeToken<StatValue<String>>() {};
 	private static final Codec KEY_PREFIX_VALUE_STORE_CODEC = new GsonCodec(TypeToken.of(String.class),
 			KEY_PREFIX_VALUE_STORE_TT);
-	private static final Duration LOCK_LEASE_DURATION = Duration.ofSeconds(10);
 	private final RedissonClient redisClient;
 	private final String host;
 	private String _value;
@@ -67,9 +63,7 @@ public class KeyPrefixService {
 				return FutureUtils.immediateResultFuture(statValue);
 			if (!locked) {
 				var semaphore = new KeepAliveSemaphore(this.redisClient, 1, getStorageKey(), "lock");
-				var acquireFuture = semaphore.acquireAsyncKeepAlive(
-						AcquireAsyncKeepAliveRequest.<StatValue<String>>builder().leaseTimeToLive(LOCK_LEASE_DURATION)
-								.onAcquiredFlatMap(() -> getOrCreateValue(true)).build());
+				var acquireFuture = semaphore.acquireAsyncKeepAliveFlatSupply(() -> getOrCreateValue(true));
 				return acquireFuture;
 			}
 			var newStatValue = StatValue.build(KeyGenerator.apply(this.host, Utils.Crypto.getSecureRandomString()));
