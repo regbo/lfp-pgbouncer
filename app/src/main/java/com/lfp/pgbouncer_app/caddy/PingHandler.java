@@ -10,6 +10,7 @@ import com.lfp.connect.undertow.handler.MessageHandler;
 import com.lfp.joe.core.properties.Configs;
 import com.lfp.joe.net.http.ServiceConfig;
 import com.lfp.joe.net.http.client.HttpClients;
+import com.lfp.joe.net.http.request.HttpRequests;
 import com.lfp.joe.net.status.StatusCodes;
 import com.lfp.joe.serial.Serials;
 import com.lfp.joe.utils.Utils;
@@ -21,8 +22,7 @@ import io.undertow.server.handlers.PathHandler;
 
 public class PingHandler extends MessageHandler implements Consumer<PathHandler> {
 
-	private static final Class<?> THIS_CLASS = new Object() {
-	}.getClass().getEnclosingClass();
+	private static final Class<?> THIS_CLASS = new Object() {}.getClass().getEnclosingClass();
 	private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(THIS_CLASS);
 	private static final int STATUS_CODE = StatusCodes.OK;
 	private boolean ready;
@@ -56,7 +56,8 @@ public class PingHandler extends MessageHandler implements Consumer<PathHandler>
 
 	protected boolean checkReady() throws IOException {
 		var uri = UrlBuilder.fromUri(getServiceURI()).withPath(getPath()).toUri();
-		var response = HttpClients.newRequestBuilder().uri(uri).send(BodyHandlers.ofString());
+		var request = HttpRequests.request().uri(uri);
+		var response = HttpClients.send(request, BodyHandlers.ofString());
 		StatusCodes.validate(response.statusCode(), STATUS_CODE);
 		var body = response.body();
 		var messageHandlerBody = Utils.Functions.catching(body,
