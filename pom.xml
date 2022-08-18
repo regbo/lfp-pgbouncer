@@ -23,11 +23,11 @@
   </distributionManagement>
   <properties>
     <maven.compiler.target>11</maven.compiler.target>
-    <com.lfp.joe.version>17.9.3-RELEASE</com.lfp.joe.version>
+    <com.lfp.joe.version>18.0.5-RELEASE</com.lfp.joe.version>
     <maven.build.timestamp.format>yyyy-MM-dd-HH-mm-ss</maven.build.timestamp.format>
     <maven.compiler.source>11</maven.compiler.source>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <revision>2.2.9-RELEASE</revision>
+    <revision>2.4.1-RELEASE</revision>
   </properties>
   <repositories>
     <repository>
