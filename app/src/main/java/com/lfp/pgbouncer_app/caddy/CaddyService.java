@@ -34,7 +34,7 @@ import com.lfp.caddy.core.config.Storage;
 import com.lfp.caddy.core.config.Tls;
 import com.lfp.caddy.core.config.UpstreamLayer4;
 import com.lfp.caddy.run.Caddy;
-import com.lfp.joe.beans.JodaBeans;
+import com.lfp.joe.beans.joda.JodaBeans;
 import com.lfp.joe.core.config.MachineConfig;
 import com.lfp.joe.core.function.MemoizedSupplier;
 import com.lfp.joe.core.properties.Configs;

@@ -27,7 +27,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
 import com.google.re2j.Pattern;
 import com.lfp.data.redisson.client.RedissonClientLFP;
-import com.lfp.joe.beans.JodaBeans;
+import com.lfp.joe.beans.joda.JodaBeans;
 import com.lfp.joe.serial.Serials;
 import com.lfp.joe.utils.Utils;
 import com.lfp.joe.utils.crypto.Hashable;

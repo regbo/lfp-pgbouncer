@@ -17,7 +17,7 @@ import org.joda.beans.impl.direct.DirectMetaBean;
 import org.joda.beans.impl.direct.DirectMetaProperty;
 import org.joda.beans.impl.direct.DirectMetaPropertyMap;
 
-import com.lfp.joe.beans.JodaBeans;
+import com.lfp.joe.beans.joda.JodaBeans;
 import com.lfp.pgbouncer_app.storage.StorageReader;
 
 import one.util.streamex.StreamEx;

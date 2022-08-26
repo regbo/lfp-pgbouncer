@@ -14,7 +14,7 @@ import org.joda.beans.impl.direct.DirectMetaPropertyMap;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.lfp.joe.beans.JodaBeans;
+import com.lfp.joe.beans.joda.JodaBeans;
 import com.lfp.joe.serial.Serials;
 import com.lfp.joe.utils.Utils;
 import com.lfp.joe.utils.crypto.Hashable;
