@@ -126,7 +126,7 @@ public class StorageReader implements ImmutableBean, Hashable {
 	private Optional<Date> parseModified() {
 		var je = getRedisValueJson();
 		var modifiedStr = Serials.Gsons.tryGetAsString(je, "modified").orElse(null);
-		return TimeParser.tryParseDate(modifiedStr);
+		return TimeParser.instance().tryParseDate(modifiedStr);
 	}
 
 	@Override
