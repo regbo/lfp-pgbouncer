@@ -10,10 +10,10 @@
   <artifactId>pgbouncer_app</artifactId>
   <name>${project.groupId}.${project.artifactId}</name>
   <properties>
-    <com.lfp.connect.version>10.4.3-RELEASE</com.lfp.connect.version>
+    <com.lfp.connect.version>10.4.6-RELEASE</com.lfp.connect.version>
     <java.version>11</java.version>
     <maven.build.timestamp.format>yyyy-MM-dd-HH-mm-ss</maven.build.timestamp.format>
-    <com.lfp.data.version>11.2.3-RELEASE</com.lfp.data.version>
+    <com.lfp.data.version>11.2.6-RELEASE</com.lfp.data.version>
     <start-class>${project.groupId}.${project.artifactId}.App</start-class>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
