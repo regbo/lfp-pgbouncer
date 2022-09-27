@@ -18,7 +18,7 @@ import java.util.Optional;
 
 import com.lfp.joe.certigo.impl.CertigoServiceImpl;
 import com.lfp.joe.certigo.service.CertificateInfo;
-import com.lfp.joe.core.function.Muto;
+import com.lfp.joe.utils.function.Muto;
 import com.lfp.joe.core.function.Scrapable;
 import com.lfp.joe.core.properties.Configs;
 import com.lfp.joe.net.http.ip.IPs;
