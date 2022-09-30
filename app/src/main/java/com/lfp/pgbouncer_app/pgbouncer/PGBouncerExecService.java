@@ -18,7 +18,7 @@ import java.util.Optional;
 
 import com.lfp.joe.certigo.impl.CertigoServiceImpl;
 import com.lfp.joe.certigo.service.CertificateInfo;
-import com.lfp.joe.utils.function.Muto;
+import com.lfp.joe.core.function.Muto;
 import com.lfp.joe.core.function.Scrapable;
 import com.lfp.joe.core.properties.Configs;
 import com.lfp.joe.net.http.ip.IPs;
@@ -63,7 +63,8 @@ public class PGBouncerExecService extends Scrapable.Impl {
 			prepend.add("");
 			var pamCommonAuth = new File(PAM_COMMON_AUTH_PATH);
 			var pamCommonAuthContents = Utils.Files.readFileToString(pamCommonAuth);
-			pamCommonAuthContents = StreamEx.of(prepend).append(pamCommonAuthContents)
+			pamCommonAuthContents = StreamEx.of(prepend)
+					.append(pamCommonAuthContents)
 					.joining(Objects.toString(Utils.Strings.newLine()));
 			try (var is = Utils.Bits.from(pamCommonAuthContents).inputStream();
 					var fos = new FileOutputStream(pamCommonAuth)) {
@@ -74,9 +75,7 @@ public class PGBouncerExecService extends Scrapable.Impl {
 	}
 
 	public void reload() throws IOException {
-		processMuto.acceptSynchronized(process -> {
-			if (process == null)
-				return;
+		processMuto.updateAndGet(process -> {
 			logger.info("reload started");
 			String command = String.format("su -c \"echo RELOAD | %s -p %s %s\" %s",
 					Configs.get(PGBouncerExecConfig.class).psqlExec().getAbsolutePath(),
@@ -93,7 +92,8 @@ public class PGBouncerExecService extends Scrapable.Impl {
 			output = Utils.Strings.trimToNull(output);
 			Requires.isTrue(Utils.Strings.equalsIgnoreCase(output, "reload"), "reload failed:%s", output);
 			logger.info("reload complete");
-		});
+			return process;
+		}, Objects::nonNull);
 	}
 
 	public boolean setClientTLS(CertStore certStore) throws IOException {
@@ -126,7 +126,7 @@ public class PGBouncerExecService extends Scrapable.Impl {
 	}
 
 	public ProcessLFP start() {
-		return processMuto.updateAndGetSynchronized(nil -> {
+		return processMuto.updateAndGet(nil -> {
 			try {
 				return createProcess();
 			} catch (IOException e) {
@@ -151,7 +151,8 @@ public class PGBouncerExecService extends Scrapable.Impl {
 		environmentVariables.put("PGBOUNCER_CLIENT_TLS_KEY_FILE", cfg.clientTlsKeyFile().getAbsolutePath());
 		environmentVariables.put("PGBOUNCER_CLIENT_TLS_CERT_FILE", cfg.clientTlsCertFile().getAbsolutePath());
 		String command = cfg.pgBouncerExec().getAbsolutePath();
-		var argsStream = Utils.Lots.stream(args).filter(Utils.Strings::isNotBlank)
+		var argsStream = Utils.Lots.stream(args)
+				.filter(Utils.Strings::isNotBlank)
 				.ifEmpty(Utils.Lots.defer(() -> cfg.pgBouncerArgumentsDefault()));
 		command = StreamEx.of(command).append(argsStream).joining(" ");
 		var process = Procs.start(command, null, environmentVariables);
@@ -240,7 +241,9 @@ public class PGBouncerExecService extends Scrapable.Impl {
 		} catch (IOException e) {
 			throw RuntimeException.class.isInstance(e) ? RuntimeException.class.cast(e) : new RuntimeException(e);
 		}
-		var size = Optional.ofNullable(certificateInfo).map(CertificateInfo::getCertificates).map(Collection::size)
+		var size = Optional.ofNullable(certificateInfo)
+				.map(CertificateInfo::getCertificates)
+				.map(Collection::size)
 				.orElse(0);
 		if (size > 0)
 			return Serials.Gsons.get().toJson(certificateInfo);
